@@ -1,0 +1,2 @@
+llm-harness-lite>=0.1.0
+pytest>=7.0
