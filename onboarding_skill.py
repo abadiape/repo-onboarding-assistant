@@ -5,7 +5,8 @@ Usage:
     python onboarding_skill.py /path/to/repository -o /tmp/my-output
 
 Produces (in the output dir):
-    summary.md, learning_path.md, repository_map.json, manifest.json
+    summary.md, learning_path.md, repository_map.json, three Mermaid diagrams,
+    and manifest.json
 
 Returns a harness SkillResult with registered Artifacts.
 """
@@ -25,6 +26,11 @@ from onboarding_analyzer import (  # noqa: E402
     render_summary_markdown,
 )
 from repository_scan import scan_repository  # noqa: E402
+from visualizations import (  # noqa: E402
+    render_architecture_overview_mermaid,
+    render_dependency_graph_mermaid,
+    render_module_graph_mermaid,
+)
 
 try:
     from llm_harness_lite import Artifact, ArtifactRegistry, ArtifactType, SkillResult
@@ -34,6 +40,7 @@ except ImportError:  # Fallback so the skill logic stays testable without the ha
     class ArtifactType(str, Enum):
         MARKDOWN = "markdown"
         JSON = "json"
+        MERMAID = "mermaid"
 
     class Artifact:  # type: ignore[no-redef]
         def __init__(self, name, type, path, description="", metadata=None):
@@ -87,6 +94,11 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
 
     summary_md = render_summary_markdown(model, insights)
     learning_md = render_learning_path_markdown(model, insights)
+    diagrams = {
+        "dependency_graph.mmd": render_dependency_graph_mermaid(model),
+        "module_graph.mmd": render_module_graph_mermaid(model),
+        "architecture_overview.mmd": render_architecture_overview_mermaid(model),
+    }
 
     summary_path = out / "summary.md"
     learning_path_path = out / "learning_path.md"
@@ -98,6 +110,11 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
         json.dumps(model.to_dict(), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    diagram_paths = {}
+    for name, content in diagrams.items():
+        diagram_path = out / name
+        diagram_path.write_text(content, encoding="utf-8")
+        diagram_paths[name] = diagram_path
 
     registry = ArtifactRegistry()
     registry.register(Artifact(
@@ -112,9 +129,15 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
         name="repository_map.json", type=ArtifactType.JSON, path=str(repo_map_path),
         description="Structured RepositoryModel for the scanned repository.",
     ))
+    mermaid_type = getattr(ArtifactType, "MERMAID", "mermaid")
+    for name, diagram_path in diagram_paths.items():
+        registry.register(Artifact(
+            name=name, type=mermaid_type, path=str(diagram_path),
+            description=f"Mermaid visualization generated from RepositoryModel: {name}.",
+        ))
 
-    # First manifest write (3 artifacts), then register the manifest itself
-    # and re-export so manifest.json lists all artifacts including itself.
+    # Register the manifest after the first export, then re-export so it
+    # lists itself along with the generated artifacts.
     manifest_path = out / "manifest.json"
     registry.export_manifest(manifest_path)
     registry.register(Artifact(

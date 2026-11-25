@@ -38,8 +38,8 @@ the project or its CI should be preferred when they disagree.
 `analyzers.py` runs `GenericAnalyzer` followed by each applicable language
 analyzer. Implement the small `Analyzer` interface (`supports` and `analyze`),
 then add the analyzer to `DEFAULT_ANALYZERS`; callers can also pass a custom
-analyzer sequence to `scan_repository`. Analyzers enrich `RepositoryModel`,
-while artifact generation remains unchanged.
+analyzer sequence to `scan_repository`. Analyzers enrich `RepositoryModel`;
+artifact renderers consume that model separately from scanning.
 
 Run the skill from this directory:
 
@@ -56,6 +56,10 @@ By default, the skill writes these artifacts to `outputs/`:
 - `learning_path.md` — a suggested sequence for becoming productive
 - `repository_map.json` — the serialized `RepositoryModel`, including
   normalized metadata, dependencies, directories, files, and detected patterns
+- `dependency_graph.mmd` — declared dependency relationships in Mermaid
+- `module_graph.mmd` — directory and file containment in Mermaid
+- `architecture_overview.mmd` — technologies, major areas, entry points, and
+  other recorded architecture facts in Mermaid
 - `manifest.json` — artifacts registered through the harness API
 
 Run the tests with:

@@ -1,4 +1,4 @@
-"""End-to-end test: run_onboarding produces 4 artifacts + valid SkillResult."""
+"""End-to-end test: run_onboarding produces artifacts + valid SkillResult."""
 import json
 import sys
 from pathlib import Path
@@ -23,8 +23,17 @@ def test_run_onboarding_end_to_end(tmp_path):
     result = run_onboarding(repo, out)
 
     assert result.summary == "Repository onboarding analysis completed"
-    assert len(result.artifacts) == 4
-    for expected in ("summary.md", "learning_path.md", "repository_map.json", "manifest.json"):
+    expected_artifacts = (
+        "summary.md",
+        "learning_path.md",
+        "repository_map.json",
+        "dependency_graph.mmd",
+        "module_graph.mmd",
+        "architecture_overview.mmd",
+        "manifest.json",
+    )
+    assert len(result.artifacts) == len(expected_artifacts)
+    for expected in expected_artifacts:
         assert (out / expected).is_file(), f"missing {expected}"
 
     repo_map = json.loads((out / "repository_map.json").read_text(encoding="utf-8"))
@@ -39,4 +48,9 @@ def test_run_onboarding_end_to_end(tmp_path):
 
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert "generated_at" in manifest
-    assert len(manifest["artifacts"]) == 4
+    assert {artifact["name"] for artifact in manifest["artifacts"]} == set(expected_artifacts)
+    assert all(
+        artifact["type"] == "mermaid"
+        for artifact in manifest["artifacts"]
+        if artifact["name"].endswith(".mmd")
+    )
