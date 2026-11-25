@@ -25,10 +25,14 @@ dependency graphs, Mermaid diagrams, security analysis.
    convention-based inspection of filenames and manifest contents builds a
    `RepositoryInventory` (see `models.py`): languages, frameworks, package
    managers, build tools, test frameworks, important files, CI/CD files,
-   top-level directories, entry points, build/test instructions.
+   top-level directories, entry points, build/test instructions, and onboarding
+   documents. Markdown setup guides are scanned for shell commands in relevant
+   fenced code blocks, and CI YAML files are checked for inline `run` steps.
+   Commands are reported with their source and section and are never executed.
 2. **Onboarding Analyzer** (`onboarding_analyzer.py`) — heuristic insights on
    top of the inventory: summary, main technologies, learning path,
-   files-to-read-first, build/test cheat sheet.
+   files-to-read-first, project-specific setup guidance, and build/test cheat
+   sheet.
 3. **Artifact Generation** (`onboarding_skill.py`) — writes artifacts via
    `ArtifactRegistry` and returns a harness `SkillResult`.
 

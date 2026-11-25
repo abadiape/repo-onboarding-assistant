@@ -19,13 +19,18 @@ class RepositoryInventory:
 
     repository_name: str
     root_path: str = ""
+    readme_summary: str = ""
     languages: list[str] = field(default_factory=list)
     frameworks: list[str] = field(default_factory=list)
     package_managers: list[str] = field(default_factory=list)
     build_tools: list[str] = field(default_factory=list)
     test_frameworks: list[str] = field(default_factory=list)
     important_files: list[str] = field(default_factory=list)
+    onboarding_docs: list[str] = field(default_factory=list)
+    setup_guides: list[str] = field(default_factory=list)
+    documented_setup_commands: list[dict[str, str]] = field(default_factory=list)
     ci_cd_files: list[str] = field(default_factory=list)
+    ci_commands: list[dict[str, str]] = field(default_factory=list)
     top_level_directories: list[str] = field(default_factory=list)
     entry_points: list[str] = field(default_factory=list)
     build_instructions: list[str] = field(default_factory=list)

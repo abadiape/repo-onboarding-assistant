@@ -19,7 +19,10 @@ def make_python_repo(base: Path) -> Path:
     )
     (repo / "src" / "main.py").write_text("print('hi')\n", encoding="utf-8")
     (repo / "tests" / "test_main.py").write_text("def test_x(): pass\n", encoding="utf-8")
-    (repo / ".github" / "workflows" / "ci.yml").write_text("on: [push]\n", encoding="utf-8")
+    (repo / ".github" / "workflows" / "ci.yml").write_text(
+        "on: [push]\njobs:\n  test:\n    steps:\n      - run: pytest -q\n",
+        encoding="utf-8",
+    )
     (repo / "Dockerfile").write_text("FROM python:3.11\n", encoding="utf-8")
     return repo
 
@@ -34,9 +37,45 @@ def test_scan_python_repo(tmp_path):
     assert "pytest" in inv.test_frameworks or any("pytest" in t for t in inv.test_frameworks)
     assert "README.md" in inv.important_files
     assert ".github/workflows/ci.yml" in inv.ci_cd_files
+    assert {"source": ".github/workflows/ci.yml", "command": "pytest -q"} in inv.ci_commands
     assert "Dockerfile" in inv.ci_cd_files
     assert "src" in inv.top_level_directories
     assert any("pytest" in c for c in inv.test_instructions)
+
+
+def test_scan_collects_local_setup_guide_and_documented_commands(tmp_path):
+    repo = tmp_path / "demo-setup"
+    repo.mkdir()
+    (repo / ".ruff_cache").mkdir()
+    (repo / "README.md").write_text(
+        "# Demo\n\nA small local-first toolkit for developer onboarding.\n",
+        encoding="utf-8",
+    )
+    (repo / "LOCAL_SETUP.md").write_text(
+        "# Local setup\n\n## Install\n\n```bash\n"
+        "python -m venv .venv\npip install -e \".[dev]\"\n"
+        "```\n\n## Run\n\n```sh\npytest\n```\n",
+        encoding="utf-8",
+    )
+    (repo / "pyproject.toml").write_text(
+        '[build-system]\nrequires = ["hatchling"]\n'
+        'build-backend = "hatchling.build"\n',
+        encoding="utf-8",
+    )
+
+    inv = scan_repository(repo)
+
+    assert "LOCAL_SETUP.md" in inv.important_files
+    assert "LOCAL_SETUP.md" in inv.onboarding_docs
+    assert "LOCAL_SETUP.md" in inv.setup_guides
+    assert inv.readme_summary == "A small local-first toolkit for developer onboarding."
+    assert "Python build (Hatch)" in inv.build_tools
+    assert [item["command"] for item in inv.documented_setup_commands] == [
+        "python -m venv .venv",
+        'pip install -e ".[dev]"',
+        "pytest",
+    ]
+    assert ".ruff_cache" not in inv.top_level_directories
 
 
 def test_scan_node_laravel_and_errors(tmp_path):
