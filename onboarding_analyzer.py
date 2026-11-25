@@ -40,6 +40,9 @@ def analyze_inventory(inv: RepositoryInventory) -> OnboardingInsights:
             "start from the README and top-level directories."
         )
 
+    if inv.readme_summary:
+        summary += f" README description: {inv.readme_summary}"
+
     if inv.top_level_directories:
         summary += f" Top-level areas: {', '.join(inv.top_level_directories[:8])}."
     if inv.entry_points:
@@ -64,6 +67,8 @@ def _files_to_read_first(inv: RepositoryInventory) -> list[str]:
     """Order important files by onboarding value: docs first, then manifests."""
     priority_order = [
         "readme.md", "readme.rst", "readme",
+        "local_setup.md", "setup.md", "getting_started.md",
+        "development.md", "dev_setup.md", "install.md",
         "contributing.md", "contributing.rst",
         "changelog.md", "changelog.rst",
         "package.json", "pyproject.toml", "requirements.txt",
@@ -80,7 +85,7 @@ def _files_to_read_first(inv: RepositoryInventory) -> list[str]:
         except ValueError:
             return (99, path)
 
-    ordered = sorted(set(inv.important_files), key=rank)
+    ordered = sorted(set(inv.important_files + inv.onboarding_docs), key=rank)
     for entry in inv.entry_points:
         if entry not in ordered:
             ordered.append(entry)
@@ -101,6 +106,13 @@ def _learning_path(inv: RepositoryInventory, files_first: list[str]) -> list[dic
         add("Orient with the README", f"Read {', '.join(readmes)} for purpose, setup, and usage.")
     else:
         add("Look for docs", "No README found — check top-level docs/ or ask a maintainer what this repo does.")
+
+    if inv.setup_guides:
+        add(
+            "Follow the project setup guide",
+            f"Use {', '.join(f'`{path}`' for path in inv.setup_guides)} for project-specific "
+            "environment, dependency, and run instructions.",
+        )
 
     if files_first:
         add("Read the key files", "Skim in this order: " + ", ".join(f"`{f}`" for f in files_first[:6]) + ".")
@@ -173,13 +185,31 @@ def render_summary_markdown(inv: RepositoryInventory, insights: OnboardingInsigh
             lines.append(f"{i}. `{f}`")
     else:
         lines.append("_No candidate files found._")
-    lines += ["", "## Build", ""]
+    if inv.onboarding_docs:
+        lines += ["", "## Onboarding documentation", ""]
+        lines += [f"- `{path}`" for path in inv.onboarding_docs]
+    if inv.documented_setup_commands:
+        lines += ["", "## Setup commands documented by the project", ""]
+        current_source = ""
+        for item in inv.documented_setup_commands:
+            if item["source"] != current_source:
+                current_source = item["source"]
+                lines.append(f"- From `{current_source}`:")
+            section = f" ({item['section']})" if item["section"] else ""
+            lines.append(f"  - `{item['command']}`{section}")
+    lines += ["", "## Build / install (inferred from metadata)", ""]
     lines += [f"- `{c}`" for c in insights.build_instructions] or ["- _No build steps detected._"]
     lines += ["", "## Test", ""]
     lines += [f"- `{c}`" for c in insights.test_instructions] or ["- _No test commands detected._"]
     if inv.ci_cd_files:
         lines += ["", "## CI/CD", ""]
         lines += [f"- `{c}`" for c in inv.ci_cd_files]
+    if inv.ci_commands:
+        lines += ["", "### Commands observed in CI", ""]
+        lines += [
+            f"- `{item['command']}` — `{item['source']}`"
+            for item in inv.ci_commands
+        ]
     if insights.open_questions:
         lines += ["", "## Open questions", ""]
         lines += [f"- {q}" for q in insights.open_questions]

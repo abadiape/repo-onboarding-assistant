@@ -18,6 +18,7 @@ from models import RepositoryInventory
 IGNORED_DIRS = {
     ".git", ".hg", ".svn",
     "__pycache__", ".pytest_cache", ".venv", "venv", ".env",
+    ".ruff_cache", ".mypy_cache", ".cache", ".tox", ".nox",
     "node_modules", ".next", "dist", "build", "target",
     ".idea", ".vscode",
 }
@@ -51,6 +52,8 @@ IMPORTANT_FILENAMES = {
     "CHANGELOG.md", "CHANGELOG.rst", "CHANGELOG",
     "CONTRIBUTING.md", "CONTRIBUTING.rst", "CONTRIBUTING",
     "CODE_OF_CONDUCT.md", "SECURITY.md",
+    "LOCAL_SETUP.md", "SETUP.md", "INSTALL.md", "DEVELOPMENT.md",
+    "DEV_SETUP.md", "GETTING_STARTED.md",
     "pyproject.toml", "requirements.txt", "requirements-dev.txt",
     "setup.py", "setup.cfg", "Pipfile", "poetry.lock",
     "package.json", "tsconfig.json",
@@ -74,6 +77,11 @@ CI_CD_PATTERNS = {
     "docker-compose.yaml",
 }
 
+SETUP_GUIDE_FILENAMES = {
+    "local_setup.md", "setup.md", "install.md", "development.md",
+    "dev_setup.md", "getting_started.md",
+}
+
 
 def _read_text(path: Path, limit: int = 200_000) -> str:
     try:
@@ -88,6 +96,29 @@ def _read_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, ValueError):
         return {}
+
+
+def _extract_readme_summary(root: Path, files_by_name: dict[str, list[Path]]) -> str:
+    candidates = [
+        path for path in files_by_name.get("README.md", [])
+        if path.parent == root
+    ]
+    if not candidates:
+        return ""
+
+    lines: list[str] = []
+    for line in _read_text(candidates[0], limit=20_000).splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if lines:
+                break
+            continue
+        if stripped.startswith("#") or stripped.startswith("!["):
+            continue
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            break
+        lines.append(stripped)
+    return " ".join(lines)[:500]
 
 
 def _iter_project_files(root: Path):
@@ -273,10 +304,25 @@ def _detect_package_managers(files_by_name: dict[str, list[Path]]) -> list[str]:
 
 def _detect_build_tools(files_by_name: dict[str, list[Path]]) -> list[str]:
     tools: list[str] = []
+    if "pyproject.toml" in files_by_name:
+        pyproject_text = _read_text(files_by_name["pyproject.toml"][0]).lower()
+        backends = (
+            ("poetry.core.masonry.api", "Poetry"),
+            ("hatchling.build", "Hatch"),
+            ("setuptools.build_meta", "setuptools"),
+            ("flit_core.buildapi", "Flit"),
+            ("pdm.backend", "PDM"),
+        )
+        tools.append(
+            next(
+                (f"Python build ({label})" for backend, label in backends if backend in pyproject_text),
+                "Python build (pyproject.toml)",
+            )
+        )
+    elif "setup.py" in files_by_name:
+        tools.append("Python build (setuptools)")
     if "requirements.txt" in files_by_name:
         tools.append("pip")
-    if "pyproject.toml" in files_by_name or "setup.py" in files_by_name:
-        tools.append("Python build (setuptools/poetry)")
     if "package.json" in files_by_name:
         pkg = _read_json(files_by_name["package.json"][0])
         scripts = pkg.get("scripts", {})
@@ -385,6 +431,21 @@ def _collect_ci_cd_files(root: Path) -> list[str]:
     return found
 
 
+def _collect_ci_commands(root: Path, ci_cd_files: list[str]) -> list[dict[str, str]]:
+    commands: list[dict[str, str]] = []
+    for relative in ci_cd_files:
+        if Path(relative).suffix.lower() not in {".yml", ".yaml"}:
+            continue
+        for line in _read_text(root / relative).splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- run:"):
+                continue
+            command = stripped.removeprefix("- run:").strip()
+            if command:
+                commands.append({"source": relative, "command": command})
+    return commands
+
+
 def _collect_important_files(root: Path, files_by_name: dict[str, list[Path]]) -> list[str]:
     important: list[str] = []
     for name, paths in files_by_name.items():
@@ -405,6 +466,114 @@ def _collect_important_files(root: Path, files_by_name: dict[str, list[Path]]) -
 
     important = sorted(set(important), key=sort_key)
     return important[:30]
+
+
+def _collect_onboarding_docs(
+    root: Path, files_by_name: dict[str, list[Path]]
+) -> tuple[list[str], list[str]]:
+    docs: set[str] = set()
+    setup_guides: set[str] = set()
+    for paths in files_by_name.values():
+        for path in paths:
+            try:
+                relative_path = path.relative_to(root)
+            except ValueError:
+                continue
+            if len(relative_path.parts) > 2 or path.suffix.lower() not in {".md", ".rst"}:
+                continue
+
+            relative = relative_path.as_posix()
+            name = path.name.lower()
+            if name.startswith("readme") or name in {
+                "contributing.md", "contributing.rst", "local_setup.md", "setup.md",
+                "install.md", "development.md", "dev_setup.md", "getting_started.md",
+            } or relative_path.parts[0].lower() == "docs":
+                docs.add(relative)
+            if name in SETUP_GUIDE_FILENAMES:
+                setup_guides.add(relative)
+
+    doc_order = {
+        "readme.md": 0,
+        "local_setup.md": 1,
+        "setup.md": 2,
+        "getting_started.md": 3,
+        "development.md": 4,
+        "dev_setup.md": 5,
+        "install.md": 6,
+        "contributing.md": 7,
+    }
+
+    def sort_key(path: str) -> tuple[int, str]:
+        name = Path(path).name.lower()
+        return (doc_order.get(name, 10), path)
+
+    return sorted(docs, key=sort_key), sorted(setup_guides, key=sort_key)
+
+
+def _clean_heading(heading: str) -> str:
+    heading = heading.strip()
+    if heading and heading[0].isdigit():
+        separator = next((i for i, char in enumerate(heading) if char.isspace()), -1)
+        if separator > 0 and heading[:separator].rstrip(".)").isdigit():
+            return heading[separator:].strip()
+    return heading
+
+
+def _extract_documented_setup_commands(
+    root: Path, docs: list[str]
+) -> list[dict[str, str]]:
+    """Collect shell commands from relevant Markdown code blocks; never execute them."""
+    commands: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    relevant_headings = (
+        "setup", "install", "build", "test", "run", "develop", "quick start",
+        "getting started", "container", "environment",
+    )
+    shell_languages = {"bash", "sh", "shell", "zsh", "console"}
+
+    for relative in docs:
+        path = root / relative
+        is_setup_guide = path.name.lower() in SETUP_GUIDE_FILENAMES
+        text = _read_text(path)
+        heading = ""
+        fence_language = ""
+        in_fence = False
+
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                if not in_fence:
+                    fence_language = stripped[3:].strip().split(maxsplit=1)[0].lower() if stripped[3:].strip() else ""
+                    in_fence = True
+                    continue
+                in_fence = False
+                fence_language = ""
+                continue
+
+            if not in_fence:
+                if stripped.startswith("#"):
+                    heading = _clean_heading(stripped.lstrip("#"))
+                continue
+
+            heading_is_relevant = any(term in heading.lower() for term in relevant_headings)
+            if fence_language not in shell_languages or not (is_setup_guide or heading_is_relevant):
+                continue
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            command = stripped.removeprefix("$ ").removeprefix("> ").strip()
+            key = (relative, heading, command)
+            if key not in seen:
+                commands.append({
+                    "source": relative,
+                    "section": heading,
+                    "command": command,
+                })
+                seen.add(key)
+            if len(commands) >= 40:
+                return commands
+
+    return commands
 
 
 def _collect_entry_points(root: Path, files_by_name: dict[str, list[Path]]) -> list[str]:
@@ -451,24 +620,34 @@ def scan_repository(repo_path: str | Path) -> RepositoryInventory:
 
     languages = _detect_languages(root, files_by_name)
     frameworks = _detect_frameworks(root, files_by_name)
+    onboarding_docs, setup_guides = _collect_onboarding_docs(root, files_by_name)
+    documented_setup_commands = _extract_documented_setup_commands(
+        root, onboarding_docs
+    )
 
     top_level_directories = sorted(
         p.name for p in root.iterdir() if p.is_dir() and p.name not in IGNORED_DIRS
     )
 
+    ci_cd_files = _collect_ci_cd_files(root)
     build_instructions = _build_instructions(root, files_by_name, package_json)
     test_instructions = _test_instructions(package_json, files_by_name)
 
     return RepositoryInventory(
         repository_name=root.name,
         root_path=str(root),
+        readme_summary=_extract_readme_summary(root, files_by_name),
         languages=languages,
         frameworks=frameworks,
         package_managers=_detect_package_managers(files_by_name),
         build_tools=_detect_build_tools(files_by_name),
         test_frameworks=_detect_test_frameworks(root, files_by_name, package_json),
         important_files=_collect_important_files(root, files_by_name),
-        ci_cd_files=_collect_ci_cd_files(root),
+        onboarding_docs=onboarding_docs,
+        setup_guides=setup_guides,
+        documented_setup_commands=documented_setup_commands,
+        ci_cd_files=ci_cd_files,
+        ci_commands=_collect_ci_commands(root, ci_cd_files),
         top_level_directories=top_level_directories,
         entry_points=_collect_entry_points(root, files_by_name),
         build_instructions=build_instructions,
@@ -483,7 +662,11 @@ def _build_instructions(
     if "requirements.txt" in files_by_name:
         instructions.append("pip install -r requirements.txt")
     if "pyproject.toml" in files_by_name:
-        instructions.append("pip install -e .  (or `poetry install` if Poetry-based)")
+        pyproject_text = _read_text(files_by_name["pyproject.toml"][0]).lower()
+        if "[tool.poetry]" in pyproject_text:
+            instructions.append("poetry install")
+        else:
+            instructions.append("python -m pip install -e .")
     if "package.json" in files_by_name:
         instructions.append("npm install  (or yarn/pnpm if a lockfile is present)")
         scripts = package_json.get("scripts", {})
