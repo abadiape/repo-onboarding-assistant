@@ -16,8 +16,10 @@ The skill itself is independent from the harness — no harness changes required
 - What files are most important?
 - How is the project built and tested?
 
-Out of scope for the MVP: architecture graphs, dashboards, AST analysis,
-dependency graphs, Mermaid diagrams, security analysis.
+Out of scope for the MVP: deep architecture/dependency analysis (such as
+imports and calls), dashboards, AST analysis, and security analysis. Mermaid
+artifacts visualize the repository structure and declarations already recorded
+by `RepositoryModel`; they do not infer source-level relationships.
 
 ## How it works
 
@@ -51,6 +53,10 @@ Output (`outputs/` by default):
 - `summary.md` — repository overview in Markdown
 - `learning_path.md` — step-by-step suggested onboarding path
 - `repository_map.json` — serialized `RepositoryModel`
+- `dependency_graph.mmd` — declared dependencies in Mermaid
+- `module_graph.mmd` — directory and file containment in Mermaid
+- `architecture_overview.mmd` — technologies, major areas, and entry points in
+  Mermaid
 - `manifest.json` — generated automatically through `ArtifactRegistry`
 
 The skill returns:
@@ -58,7 +64,9 @@ The skill returns:
 ```python
 SkillResult(
     summary="Repository onboarding analysis completed",
-    artifacts=[...],  # summary.md, learning_path.md, repository_map.json, manifest.json
+    artifacts=[...],  # summary.md, learning_path.md, repository_map.json,
+                      # dependency_graph.mmd, module_graph.mmd,
+                      # architecture_overview.mmd, manifest.json
 )
 ```
 
