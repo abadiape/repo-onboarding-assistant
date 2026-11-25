@@ -17,6 +17,7 @@ class Dependency:
     version: str | None
     source: str
     scope: str = "runtime"
+    category: str = "unclassified"
 
 
 @dataclass

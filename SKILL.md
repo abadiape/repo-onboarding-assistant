@@ -28,7 +28,9 @@ dependency graphs, Mermaid diagrams, security analysis.
    patterns, and onboarding details. Markdown setup guides are scanned for
    shell commands in relevant fenced code blocks, and CI YAML files are
    checked for inline `run` steps. Commands are reported with their source
-   and section and are never executed.
+   and section and are never executed. `analyzers.py` then runs the generic
+   analyzer and any applicable Node.js, Python, or PHP analyzer to enrich the
+   model with framework, dependency-category, structure, and convention facts.
 2. **Onboarding Analyzer** (`onboarding_analyzer.py`) — heuristic insights on
    top of the model: summary, main technologies, learning path,
    files-to-read-first, project-specific setup guidance, and build/test cheat
@@ -88,6 +90,7 @@ repo-onboarding-assistant/
 ├── skill.yaml
 ├── onboarding_skill.py      # skill entrypoint + Artifact generation + CLI
 ├── repository_scan.py       # Repository Scan Capability (local to skill)
+├── analyzers.py             # Generic and language-specific model enrichers
 ├── onboarding_analyzer.py   # heuristic insights over the model
 ├── models.py                # RepositoryModel and normalized records
 ├── templates/               # reference Markdown skeletons
