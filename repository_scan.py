@@ -11,8 +11,10 @@ from __future__ import annotations
 import json
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from pathlib import Path
 
+from analyzers import Analyzer, DEFAULT_ANALYZERS, enrich_repository_model
 from models import Dependency, RepositoryFile, RepositoryModel
 
 # Directories never treated as source structure or recursed into
@@ -471,83 +473,6 @@ def _detect_languages(root: Path, files_by_name: dict[str, list[Path]]) -> list[
     return languages
 
 
-def _detect_frameworks(root: Path, files_by_name: dict[str, list[Path]]) -> list[str]:
-    frameworks: list[str] = []
-
-    pkg_json: dict = {}
-    if "package.json" in files_by_name:
-        pkg_json = _read_json(files_by_name["package.json"][0])
-    deps: dict = {}
-    for section in ("dependencies", "devDependencies", "peerDependencies"):
-        section_deps = pkg_json.get(section, {})
-        if isinstance(section_deps, dict):
-            deps.update(section_deps)
-
-    def has_dep(name: str) -> bool:
-        return name in deps
-
-    # --- JavaScript / TypeScript ---
-    if has_dep("next"):
-        frameworks.append("Next.js")
-    if has_dep("react"):
-        frameworks.append("React")
-    if has_dep("vue"):
-        frameworks.append("Vue")
-    if has_dep("@angular/core"):
-        frameworks.append("Angular")
-    if has_dep("express"):
-        frameworks.append("Express")
-    if has_dep("nestjs") or has_dep("@nestjs/core"):
-        frameworks.append("NestJS")
-    if has_dep("svelte"):
-        frameworks.append("Svelte")
-
-    # --- Python (lightweight text search in manifests) ---
-    py_manifest = ""
-    for name in ("pyproject.toml", "requirements.txt", "requirements-dev.txt", "setup.py", "Pipfile"):
-        for p in files_by_name.get(name, []):
-            py_manifest += _read_text(p).lower() + "\n"
-    if "django" in py_manifest or "manage.py" in files_by_name:
-        frameworks.append("Django")
-    if "fastapi" in py_manifest:
-        frameworks.append("FastAPI")
-    if "flask" in py_manifest and "Django" not in frameworks:
-        frameworks.append("Flask")
-    elif "flask" in py_manifest:
-        frameworks.append("Flask")
-
-    # --- PHP ---
-    if "artisan" in files_by_name and "composer.json" in files_by_name:
-        frameworks.append("Laravel")
-    elif "composer.json" in files_by_name:
-        composer_text = _read_text(files_by_name["composer.json"][0]).lower()
-        if "laravel/framework" in composer_text:
-            frameworks.append("Laravel")
-        if "symfony/" in composer_text:
-            frameworks.append("Symfony")
-
-    # --- Java ---
-    for name in ("pom.xml", "build.gradle", "build.gradle.kts"):
-        for p in files_by_name.get(name, []):
-            text = _read_text(p).lower()
-            if "spring-boot" in text or "springframework" in text:
-                frameworks.append("Spring Boot")
-                break
-
-    # --- .NET / others via file conventions ---
-    if any(n.endswith(".csproj") for n in files_by_name):
-        frameworks.append(".NET")
-
-    # Deduplicate preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for fw in frameworks:
-        if fw not in seen:
-            seen.add(fw)
-            unique.append(fw)
-    return unique
-
-
 def _detect_package_managers(files_by_name: dict[str, list[Path]]) -> list[str]:
     managers: list[str] = []
     if "pyproject.toml" in files_by_name:
@@ -883,7 +808,10 @@ def _collect_entry_points(root: Path, files_by_name: dict[str, list[Path]]) -> l
     return found[:15]
 
 
-def scan_repository(repo_path: str | Path) -> RepositoryModel:
+def scan_repository(
+    repo_path: str | Path,
+    analyzers: Sequence[Analyzer] = DEFAULT_ANALYZERS,
+) -> RepositoryModel:
     """Scan a repository directory and return its normalized model.
 
     Raises:
@@ -905,7 +833,6 @@ def scan_repository(repo_path: str | Path) -> RepositoryModel:
         package_json = _read_json(files_by_name["package.json"][0])
 
     languages = _detect_languages(root, files_by_name)
-    frameworks = _detect_frameworks(root, files_by_name)
     onboarding_docs, setup_guides = _collect_onboarding_docs(root, files_by_name)
     documented_setup_commands = _extract_documented_setup_commands(
         root, onboarding_docs
@@ -921,7 +848,7 @@ def scan_repository(repo_path: str | Path) -> RepositoryModel:
     test_instructions = _test_instructions(package_json, files_by_name)
     readme_summary = _extract_readme_summary(root, files_by_name)
 
-    return RepositoryModel(
+    model = RepositoryModel(
         repository_name=root.name,
         metadata={
             "name": root.name,
@@ -931,7 +858,6 @@ def scan_repository(repo_path: str | Path) -> RepositoryModel:
         root_path=str(root),
         readme_summary=readme_summary,
         languages=languages,
-        frameworks=frameworks,
         dependencies=_collect_dependencies(root, files_by_name),
         directories=directories,
         files=_collect_repository_files(root, files_by_name, ci_cd_files),
@@ -950,6 +876,7 @@ def scan_repository(repo_path: str | Path) -> RepositoryModel:
         build_instructions=build_instructions,
         test_instructions=test_instructions,
     )
+    return enrich_repository_model(model, analyzers)
 
 
 def _build_instructions(

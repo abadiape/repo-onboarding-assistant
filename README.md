@@ -20,6 +20,7 @@ calls, execute project commands, or produce a dependency graph.
 It currently inventories:
 
 - Languages and selected frameworks, detected from manifests and file extensions
+- Framework-specific conventions and dependency categories from applicable analyzers
 - Normalized dependencies and their manifest source/scope
 - Repository-relative file records, directory paths, and detected conventions
 - Package managers, build backends, and common test frameworks
@@ -31,6 +32,14 @@ It currently inventories:
 Documented commands are surfaced as evidence, not executed. Build and test
 suggestions inferred from manifests are heuristics; the commands declared by
 the project or its CI should be preferred when they disagree.
+
+## Analyzer extensions
+
+`analyzers.py` runs `GenericAnalyzer` followed by each applicable language
+analyzer. Implement the small `Analyzer` interface (`supports` and `analyze`),
+then add the analyzer to `DEFAULT_ANALYZERS`; callers can also pass a custom
+analyzer sequence to `scan_repository`. Analyzers enrich `RepositoryModel`,
+while artifact generation remains unchanged.
 
 Run the skill from this directory:
 
@@ -165,6 +174,7 @@ repo-onboarding-assistant/
 ├── skill.yaml               # Harness skill metadata
 ├── onboarding_skill.py      # CLI, artifact generation, SkillResult boundary
 ├── repository_scan.py       # Local repository scanner
+├── analyzers.py             # Generic and language-specific model enrichers
 ├── onboarding_analyzer.py  # Onboarding heuristics and Markdown rendering
 ├── models.py                # RepositoryModel and normalized records
 ├── templates/               # Reference output templates
