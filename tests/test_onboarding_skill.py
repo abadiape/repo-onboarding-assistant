@@ -30,6 +30,7 @@ def test_run_onboarding_end_to_end(tmp_path):
         "dependency_graph.mmd",
         "module_graph.mmd",
         "architecture_overview.mmd",
+        "dashboard.html",
         "manifest.json",
     )
     assert len(result.artifacts) == len(expected_artifacts)
@@ -54,3 +55,18 @@ def test_run_onboarding_end_to_end(tmp_path):
         for artifact in manifest["artifacts"]
         if artifact["name"].endswith(".mmd")
     )
+    dashboard = (out / "dashboard.html").read_text(encoding="utf-8")
+    assert "<!doctype html>" in dashboard.lower()
+    assert "Repository Overview" in dashboard
+    assert "Detected Languages" in dashboard
+    assert "Frameworks" in dashboard
+    assert "Dependencies" in dashboard
+    assert "Generated Mermaid Diagrams" in dashboard
+    assert "Learning Path" in dashboard
+    assert "Summary" in dashboard
+    assert "flowchart LR" in dashboard
+    dashboard_artifact = next(
+        artifact for artifact in manifest["artifacts"]
+        if artifact["name"] == "dashboard.html"
+    )
+    assert dashboard_artifact["type"] == "html"
