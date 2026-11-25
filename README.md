@@ -20,6 +20,8 @@ calls, execute project commands, or produce a dependency graph.
 It currently inventories:
 
 - Languages and selected frameworks, detected from manifests and file extensions
+- Normalized dependencies and their manifest source/scope
+- Repository-relative file records, directory paths, and detected conventions
 - Package managers, build backends, and common test frameworks
 - Important files, onboarding documents, and top-level directories
 - Likely entry points, build/test suggestions, and CI/CD configuration files
@@ -43,7 +45,8 @@ By default, the skill writes these artifacts to `outputs/`:
 - `summary.md` — technologies, repository structure, reading suggestions, and
   documented setup/CI commands
 - `learning_path.md` — a suggested sequence for becoming productive
-- `repository_map.json` — the serialized `RepositoryInventory`
+- `repository_map.json` — the serialized `RepositoryModel`, including
+  normalized metadata, dependencies, directories, files, and detected patterns
 - `manifest.json` — artifacts registered through the harness API
 
 Run the tests with:
@@ -52,23 +55,24 @@ Run the tests with:
 pytest tests/ -v
 ```
 
-## Why the inventory is the foundation
+## Why the model is the foundation
 
-The inventory should be a stable, tool-independent description of what the
+The model should be a stable, tool-independent description of what the
 scanner can observe. It should not contain conclusions that belong to a
-particular capability. For example, the inventory can record that module A
+particular consumer. For example, a future code analyzer can record that module A
 imports module B and that a test file references module A; onboarding can use
 those facts to suggest a reading order, while an architecture explorer can use
 them to show module dependencies.
 
-As the scanner grows, the inventory can evolve from the current flat lists into
-versioned records such as:
+The current model already records repository metadata, manifest dependencies,
+file paths and roles, directories, and detected patterns. Future work can add
+versioning and deeper code-level records such as:
 
 | Record | Useful facts |
 |---|---|
-| Repository snapshot | Root, scan time, schema version, detected languages |
-| File | Relative path, kind, language, generated/vendor status, content hash |
-| Manifest | Build system, dependencies, scripts, runtime constraints |
+| Repository snapshot | Root, metadata, detected languages |
+| File | Relative path, broad kind, language |
+| Manifest | Build system, normalized dependencies, scripts, runtime constraints |
 | Symbol | Qualified name, kind (module/class/function), file and line span |
 | Relationship | Source, relation type, target, evidence location, confidence |
 
@@ -162,7 +166,7 @@ repo-onboarding-assistant/
 ├── onboarding_skill.py      # CLI, artifact generation, SkillResult boundary
 ├── repository_scan.py       # Local repository scanner
 ├── onboarding_analyzer.py  # Onboarding heuristics and Markdown rendering
-├── models.py                # RepositoryInventory data model
+├── models.py                # RepositoryModel and normalized records
 ├── templates/               # Reference output templates
 ├── outputs/                 # Default generated artifacts
 └── tests/                   # Scanner, analyzer, and end-to-end tests

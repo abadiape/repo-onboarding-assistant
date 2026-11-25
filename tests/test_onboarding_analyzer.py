@@ -69,3 +69,12 @@ def test_analyze_empty_repo():
     insights = analyze_inventory(inv)
     assert "no recognized language" in insights.summary.lower()
     assert insights.open_questions  # should flag missing tests/CI/docs
+
+
+def test_repository_inventory_legacy_positional_arguments():
+    inv = RepositoryInventory("legacy", "/repo", "description", ["Python"])
+
+    assert inv.repository_name == "legacy"
+    assert inv.root_path == "/repo"
+    assert inv.readme_summary == "description"
+    assert inv.languages == ["Python"]

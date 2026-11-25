@@ -1,4 +1,4 @@
-"""Onboarding Analyzer — heuristic insights built on RepositoryInventory.
+"""Onboarding Analyzer — heuristic insights built on RepositoryModel.
 
 No LLM calls, no AST parsing. Pure convention-based heuristics so the
 skill stays small, deterministic, and easy to extend.
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from models import RepositoryInventory
+from models import RepositoryModel
 
 
 @dataclass
@@ -21,7 +21,7 @@ class OnboardingInsights:
     open_questions: list[str] = field(default_factory=list)
 
 
-def analyze_inventory(inv: RepositoryInventory) -> OnboardingInsights:
+def analyze_inventory(inv: RepositoryModel) -> OnboardingInsights:
     techs = [*inv.languages, *inv.frameworks]
     if inv.package_managers:
         techs.append(f"managed with {', '.join(inv.package_managers)}")
@@ -63,7 +63,7 @@ def analyze_inventory(inv: RepositoryInventory) -> OnboardingInsights:
     )
 
 
-def _files_to_read_first(inv: RepositoryInventory) -> list[str]:
+def _files_to_read_first(inv: RepositoryModel) -> list[str]:
     """Order important files by onboarding value: docs first, then manifests."""
     priority_order = [
         "readme.md", "readme.rst", "readme",
@@ -92,7 +92,7 @@ def _files_to_read_first(inv: RepositoryInventory) -> list[str]:
     return ordered[:12]
 
 
-def _learning_path(inv: RepositoryInventory, files_first: list[str]) -> list[dict]:
+def _learning_path(inv: RepositoryModel, files_first: list[str]) -> list[dict]:
     steps: list[dict] = []
     step_no = 1
 
@@ -140,7 +140,7 @@ def _learning_path(inv: RepositoryInventory, files_first: list[str]) -> list[dic
     return steps
 
 
-def _open_questions(inv: RepositoryInventory) -> list[str]:
+def _open_questions(inv: RepositoryModel) -> list[str]:
     questions: list[str] = []
     if not inv.languages:
         questions.append("No language manifests detected — confirm the primary language with a maintainer.")
@@ -157,7 +157,7 @@ def _open_questions(inv: RepositoryInventory) -> list[str]:
 # Markdown rendering (used for summary.md and learning_path.md artifacts)
 # ---------------------------------------------------------------------------
 
-def render_summary_markdown(inv: RepositoryInventory, insights: OnboardingInsights) -> str:
+def render_summary_markdown(inv: RepositoryModel, insights: OnboardingInsights) -> str:
     lines = [
         f"# Repository Overview — {inv.repository_name}",
         "",
@@ -170,6 +170,17 @@ def render_summary_markdown(inv: RepositoryInventory, insights: OnboardingInsigh
         lines += [f"- {t}" for t in insights.main_technologies]
     else:
         lines.append("- _None detected_")
+    if inv.dependencies:
+        lines += ["", "## Dependencies", ""]
+        lines += [
+            f"- `{dependency.name}`"
+            + (f" `{dependency.version}`" if dependency.version else "")
+            + f" ({dependency.scope}; `{dependency.source}`)"
+            for dependency in inv.dependencies
+        ]
+    if inv.detected_patterns:
+        lines += ["", "## Detected patterns", ""]
+        lines += [f"- `{pattern}`" for pattern in inv.detected_patterns]
     lines += [
         "",
         "## High-level structure",
@@ -217,7 +228,7 @@ def render_summary_markdown(inv: RepositoryInventory, insights: OnboardingInsigh
     return "\n".join(lines)
 
 
-def render_learning_path_markdown(inv: RepositoryInventory, insights: OnboardingInsights) -> str:
+def render_learning_path_markdown(inv: RepositoryModel, insights: OnboardingInsights) -> str:
     lines = [
         f"# Learning Path — {inv.repository_name}",
         "",

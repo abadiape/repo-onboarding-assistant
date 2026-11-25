@@ -1,6 +1,6 @@
 name: repo-onboarding-assistant
 version: 0.1.0
-description: Analyze a source code repository and generate onboarding artifacts (summary, learning path, inventory map).
+description: Scan a source repository into a normalized RepositoryModel and generate onboarding artifacts.
 entrypoint: onboarding_skill.py
 entry_function: run_onboarding
 harness: llm-harness-lite (>=0.1.0)
@@ -25,4 +25,4 @@ result:
 capabilities:
   - name: repository-scan
     module: repository_scan.py
-    description: Convention-based repository inventory (languages, frameworks, build/test, CI/CD, structure)
+    description: Convention-based RepositoryModel scan (metadata, languages, dependencies, files, directories, patterns)
