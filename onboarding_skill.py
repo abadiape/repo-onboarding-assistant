@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from models import RepositoryInventory  # noqa: E402
+from models import RepositoryModel  # noqa: E402
 from onboarding_analyzer import (  # noqa: E402
     analyze_inventory,
     render_learning_path_markdown,
@@ -82,11 +82,11 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    inventory: RepositoryInventory = scan_repository(repo_path)
-    insights = analyze_inventory(inventory)
+    model: RepositoryModel = scan_repository(repo_path)
+    insights = analyze_inventory(model)
 
-    summary_md = render_summary_markdown(inventory, insights)
-    learning_md = render_learning_path_markdown(inventory, insights)
+    summary_md = render_summary_markdown(model, insights)
+    learning_md = render_learning_path_markdown(model, insights)
 
     summary_path = out / "summary.md"
     learning_path_path = out / "learning_path.md"
@@ -95,7 +95,7 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
     summary_path.write_text(summary_md, encoding="utf-8")
     learning_path_path.write_text(learning_md, encoding="utf-8")
     repo_map_path.write_text(
-        json.dumps(inventory.to_dict(), ensure_ascii=False, indent=2) + "\n",
+        json.dumps(model.to_dict(), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -110,7 +110,7 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
     ))
     registry.register(Artifact(
         name="repository_map.json", type=ArtifactType.JSON, path=str(repo_map_path),
-        description="Structured repository inventory.",
+        description="Structured RepositoryModel for the scanned repository.",
     ))
 
     # First manifest write (3 artifacts), then register the manifest itself
@@ -128,9 +128,9 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
         artifacts=registry.list_artifacts(),
     )
 
-    print(f"Repository: {inventory.repository_name}")
-    print(f"Languages: {', '.join(inventory.languages) or 'none detected'}")
-    print(f"Frameworks: {', '.join(inventory.frameworks) or 'none detected'}")
+    print(f"Repository: {model.repository_name}")
+    print(f"Languages: {', '.join(model.languages) or 'none detected'}")
+    print(f"Frameworks: {', '.join(model.frameworks) or 'none detected'}")
     print(f"Artifacts written to {out.resolve()}:")
     for artifact in result.artifacts:
         print(f"  - {artifact.name} ({artifact.path})")

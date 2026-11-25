@@ -23,14 +23,14 @@ dependency graphs, Mermaid diagrams, security analysis.
 
 1. **Repository Scan Capability** (`repository_scan.py`, local to the skill) —
    convention-based inspection of filenames and manifest contents builds a
-   `RepositoryInventory` (see `models.py`): languages, frameworks, package
-   managers, build tools, test frameworks, important files, CI/CD files,
-   top-level directories, entry points, build/test instructions, and onboarding
-   documents. Markdown setup guides are scanned for shell commands in relevant
-   fenced code blocks, and CI YAML files are checked for inline `run` steps.
-   Commands are reported with their source and section and are never executed.
+   `RepositoryModel` (see `models.py`): repository metadata, languages,
+   frameworks, normalized dependencies, directories, file records, detected
+   patterns, and onboarding details. Markdown setup guides are scanned for
+   shell commands in relevant fenced code blocks, and CI YAML files are
+   checked for inline `run` steps. Commands are reported with their source
+   and section and are never executed.
 2. **Onboarding Analyzer** (`onboarding_analyzer.py`) — heuristic insights on
-   top of the inventory: summary, main technologies, learning path,
+   top of the model: summary, main technologies, learning path,
    files-to-read-first, project-specific setup guidance, and build/test cheat
    sheet.
 3. **Artifact Generation** (`onboarding_skill.py`) — writes artifacts via
@@ -48,7 +48,7 @@ Output (`outputs/` by default):
 
 - `summary.md` — repository overview in Markdown
 - `learning_path.md` — step-by-step suggested onboarding path
-- `repository_map.json` — structured repository inventory
+- `repository_map.json` — serialized `RepositoryModel`
 - `manifest.json` — generated automatically through `ArtifactRegistry`
 
 The skill returns:
@@ -88,8 +88,8 @@ repo-onboarding-assistant/
 ├── skill.yaml
 ├── onboarding_skill.py      # skill entrypoint + Artifact generation + CLI
 ├── repository_scan.py       # Repository Scan Capability (local to skill)
-├── onboarding_analyzer.py   # heuristic insights over the inventory
-├── models.py                # RepositoryInventory model
+├── onboarding_analyzer.py   # heuristic insights over the model
+├── models.py                # RepositoryModel and normalized records
 ├── templates/               # reference Markdown skeletons
 ├── outputs/                 # generated artifacts (default target)
 └── tests/                   # pytest suite with synthetic fixture repos

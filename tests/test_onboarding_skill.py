@@ -12,8 +12,10 @@ def test_run_onboarding_end_to_end(tmp_path):
     repo = tmp_path / "sample"
     (repo / "src").mkdir(parents=True)
     (repo / "README.md").write_text("# Sample\n", encoding="utf-8")
-    (repo / "package.json").write_text('{"scripts": {"build": "tsc", "test": "jest"}}',
-                                       encoding="utf-8")
+    (repo / "package.json").write_text(
+        '{"dependencies":{"react":"^18"},"scripts":{"build":"tsc","test":"jest"}}',
+        encoding="utf-8",
+    )
     (repo / "tsconfig.json").write_text("{}", encoding="utf-8")
     (repo / "src" / "index.ts").write_text("console.log(1)\n", encoding="utf-8")
 
@@ -28,6 +30,12 @@ def test_run_onboarding_end_to_end(tmp_path):
     repo_map = json.loads((out / "repository_map.json").read_text(encoding="utf-8"))
     assert repo_map["repository_name"] == "sample"
     assert "TypeScript" in repo_map["languages"]
+    assert repo_map["metadata"]["name"] == "sample"
+    assert repo_map["directories"] == ["src"]
+    assert any(item["path"] == "package.json" for item in repo_map["files"])
+    assert any(item["name"] == "react" for item in repo_map["dependencies"])
+    assert "manifest:package.json" in repo_map["detected_patterns"]
+    assert "`react` `^18`" in (out / "summary.md").read_text(encoding="utf-8")
 
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert "generated_at" in manifest
