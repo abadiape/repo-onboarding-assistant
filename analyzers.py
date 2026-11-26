@@ -256,6 +256,7 @@ class PhpAnalyzer:
     def analyze(self, model: RepositoryModel) -> None:
         has_laravel = _has_file(model, "artisan")
         has_symfony = _has_path(model, "bin/console")
+        has_magento = False
         for dependency in model.dependencies:
             name = _dependency_name(dependency.name)
             if name == "laravel/framework":
@@ -264,6 +265,9 @@ class PhpAnalyzer:
             elif name.startswith("symfony/"):
                 dependency.category = "framework"
                 has_symfony = True
+            elif name.startswith("magento/"):
+                dependency.category = "framework"
+                has_magento = True
             elif name in {"phpunit/phpunit"}:
                 dependency.category = "testing"
             elif name in {"phpstan/phpstan", "friendsofphp/php-cs-fixer"}:
@@ -278,6 +282,8 @@ class PhpAnalyzer:
             _add_framework(model, "Symfony")
             if all(_has_directory(model, path) for path in ("src", "config", "templates")):
                 _add_pattern(model, "symfony:directory-layout")
+        if has_magento:
+            _add_framework(model, "Magento")
         if _has_file(model, "composer.json"):
             _add_pattern(model, "php:composer")
 

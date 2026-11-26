@@ -16,10 +16,11 @@ The skill itself is independent from the harness — no harness changes required
 - What files are most important?
 - How is the project built and tested?
 
-Out of scope for the MVP: deep architecture/dependency analysis (such as
-imports and calls), dashboards, AST analysis, and security analysis. Mermaid
-artifacts visualize the repository structure and declarations already recorded
-by `RepositoryModel`; they do not infer source-level relationships.
+The architecture analyzer adds high-level component views and evidence-backed
+relationship heuristics. It uses bounded lexical checks, not AST parsing or
+call-graph resolution, and distinguishes direct source evidence from
+lower-confidence framework/layout conventions. Confidence scores are
+heuristics, not probabilities, and conceptual flows are not runtime traces.
 
 ## How it works
 
@@ -39,6 +40,26 @@ by `RepositoryModel`; they do not infer source-level relationships.
    sheet.
 3. **Artifact Generation** (`onboarding_skill.py`) — writes artifacts via
    `ArtifactRegistry` and returns a harness `SkillResult`.
+4. **System Architecture Analyzer** (`architecture_analyzer.py`) — extracts an
+   `ArchitectureModel` from the repository model, framework metadata, layout,
+   public API exports, source imports/type references, and listed
+   docs/configuration, then generates architecture artifacts from that
+   representation. Feature boundaries with multiple layers and uniquely
+   matched public modules can also become components. Component confidence
+   measures evidence strength; significance combines relevance with graph
+   connections, references from prominent components, and conceptual-flow
+   position. Significance is High at 0.55 or above, Medium at 0.20 or above,
+   otherwise Low. These are heuristic scores, as are relationship confidences.
+   Layers group only recognized component roles. Inferred edges are not
+   presented as source-level call edges.
+
+Repository relevance classifies application, infrastructure, vendor, and
+generated paths before architecture inference. Vendor and generated trees are
+not traversed. Detected custom modules, themes, workspace packages, and
+layered business areas are prioritized in the overview and learning path.
+Ownership and framework package grouping use conventions and may be incomplete.
+Composer/npm lockfile names are grouped and deduplicated for drill-down; they
+indicate declared or locked packages, not necessarily installed packages.
 
 ## Usage
 
@@ -46,19 +67,41 @@ by `RepositoryModel`; they do not infer source-level relationships.
 pip install llm-harness-lite pytest
 python onboarding_skill.py /path/to/repository
 python onboarding_skill.py /path/to/repository --output-dir ./my-output
+python onboarding_skill.py /path/to/repository --module-graph app/code/Company/Module
 ```
+
+The optional `--module-graph` argument must match an area in the architecture
+map and produces `module_graph.mmd`. Overview and subsystem diagrams are capped
+at 15 nodes; the architecture map and dashboard retain the full area list.
 
 Output (`outputs/` by default):
 
 - `summary.md` — repository overview in Markdown
 - `learning_path.md` — step-by-step suggested onboarding path
 - `repository_map.json` — serialized `RepositoryModel`
-- `dependency_graph.mmd` — declared dependencies in Mermaid
-- `module_graph.mmd` — directory and file containment in Mermaid
-- `architecture_overview.mmd` — technologies, major areas, and entry points in
-  Mermaid
-- `dashboard.html` — self-contained onboarding dashboard
+- `architecture_summary.md` — architecture narrative and recommended reading
+- `architecture_map.json` — machine-readable components, subsystems, layers,
+  responsibilities, relationships with confidence/evidence, entry points,
+  integrations, and data stores; components include confidence, significance,
+  relevance, evidence, and locations
+- `system_overview.mmd` — high-level component relationship diagram
+- `execution_flow.mmd` — inferred application execution sequence
+- `subsystem_map.mmd` — major components grouped by subsystem
+- `dashboard.html` — standalone onboarding dashboard with rendered Mermaid
+  diagrams and source/copy controls
 - `manifest.json` — generated automatically through `ArtifactRegistry`
+
+The dashboard uses a pinned Mermaid.js CDN asset for diagram rendering.
+Mermaid source remains embedded and available when the renderer cannot load.
+Architecture evidence uses at most 120 model-listed files, up to 24 KB per
+file and 400 KB total, prioritizing root README/configuration, entry points,
+selected public APIs, and documentation, then interleaving other directories.
+Lexical matching and sampled evidence are not exhaustive.
+Integrations and data stores require runtime dependency, top-level import, or
+recognized runtime configuration evidence; optional/development dependencies,
+profile-gated Compose services, example and development configuration, and
+disabled YAML sections and documentation-only mentions are excluded. These
+signals are not proof of an active deployment.
 
 The skill returns:
 
@@ -66,9 +109,9 @@ The skill returns:
 SkillResult(
     summary="Repository onboarding analysis completed",
     artifacts=[...],  # summary.md, learning_path.md, repository_map.json,
-                      # dependency_graph.mmd, module_graph.mmd,
-                      # architecture_overview.mmd, dashboard.html,
-                      # manifest.json
+                      # architecture_summary.md, architecture_map.json,
+                      # system_overview.mmd, execution_flow.mmd,
+                      # subsystem_map.mmd, dashboard.html, manifest.json
 )
 ```
 

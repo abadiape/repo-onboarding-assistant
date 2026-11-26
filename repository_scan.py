@@ -14,8 +14,9 @@ import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from pathlib import Path
 
-from analyzers import Analyzer, DEFAULT_ANALYZERS, enrich_repository_model
+from analyzers import DEFAULT_ANALYZERS, Analyzer, enrich_repository_model
 from models import Dependency, RepositoryFile, RepositoryModel
+from repository_relevance import classify_path
 
 # Directories never treated as source structure or recursed into
 # when counting extensions.
@@ -23,7 +24,7 @@ IGNORED_DIRS = {
     ".git", ".hg", ".svn",
     "__pycache__", ".pytest_cache", ".venv", "venv", ".env",
     ".ruff_cache", ".mypy_cache", ".cache", ".tox", ".nox",
-    "node_modules", ".next", "dist", "build", "target",
+    ".next", "dist", "build", "target",
     ".idea", ".vscode",
 }
 
@@ -313,8 +314,14 @@ def _collect_directories(root: Path) -> list[str]:
         except OSError:
             continue
         for child in children:
-            if child.is_dir() and not child.is_symlink() and child.name not in IGNORED_DIRS:
-                directories.append(child.relative_to(root).as_posix())
+            if not child.is_dir() or child.is_symlink():
+                continue
+            relative = child.relative_to(root).as_posix()
+            level, _ = classify_path(relative)
+            if child.name in IGNORED_DIRS and child.name not in {"build", "dist", "target"}:
+                continue
+            directories.append(relative)
+            if level not in {"low", "ignored"}:
                 stack.append(child)
     return sorted(directories)
 
@@ -417,9 +424,47 @@ def _iter_project_files(root: Path):
             if entry.name in IGNORED_DIRS and entry.is_dir():
                 continue
             if entry.is_dir() and not entry.is_symlink():
-                stack.append(entry)
+                if classify_path(entry.relative_to(root).as_posix())[0] not in {"low", "ignored"}:
+                    stack.append(entry)
             elif entry.is_file():
                 yield entry
+
+
+def _collect_locked_dependencies(root: Path, files_by_name: dict[str, list[Path]]) -> list[Dependency]:
+    locked: dict[tuple[str, str], Dependency] = {}
+    for path in files_by_name.get("composer.lock", []):
+        source = path.relative_to(root).as_posix()
+        lock = _read_json(path)
+        for section in ("packages", "packages-dev"):
+            packages = lock.get(section, [])
+            if not isinstance(packages, list):
+                continue
+            for package in packages:
+                if isinstance(package, dict) and isinstance(package.get("name"), str):
+                    name = package["name"]
+                    dependency = _dependency(name, package.get("version"), source, "locked")
+                    if dependency:
+                        locked[(source, name)] = dependency
+    for path in files_by_name.get("package-lock.json", []):
+        source = path.relative_to(root).as_posix()
+        lock = _read_json(path)
+        packages = lock.get("packages", {})
+        if isinstance(packages, dict) and packages:
+            for location, package in packages.items():
+                if "node_modules/" not in location or not isinstance(package, dict):
+                    continue
+                name = location.rsplit("node_modules/", 1)[-1]
+                if name:
+                    dependency = _dependency(name, package.get("version"), source, "locked")
+                    if dependency:
+                        locked[(source, name)] = dependency
+        elif isinstance(lock.get("dependencies"), dict):
+            for name, package in lock["dependencies"].items():
+                if isinstance(package, dict):
+                    dependency = _dependency(name, package.get("version"), source, "locked")
+                    if dependency:
+                        locked[(source, name)] = dependency
+    return list(locked.values())
 
 
 def _detect_languages(root: Path, files_by_name: dict[str, list[Path]]) -> list[str]:
@@ -859,6 +904,7 @@ def scan_repository(
         readme_summary=readme_summary,
         languages=languages,
         dependencies=_collect_dependencies(root, files_by_name),
+        locked_dependencies=_collect_locked_dependencies(root, files_by_name),
         directories=directories,
         files=_collect_repository_files(root, files_by_name, ci_cd_files),
         detected_patterns=_detect_patterns(files_by_name, ci_cd_files),

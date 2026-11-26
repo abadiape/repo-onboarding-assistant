@@ -6,6 +6,8 @@ import re
 
 from models import RepositoryModel
 from onboarding_analyzer import OnboardingInsights
+from architecture_model import ArchitectureModel
+from repository_relevance import aggregate_dependencies, relevant_model
 
 
 def _escape(value: object) -> str:
@@ -14,7 +16,12 @@ def _escape(value: object) -> str:
 
 def _inline_markdown(value: str) -> str:
     escaped = _escape(value)
-    return re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+    def render(match: re.Match[str]) -> str:
+        token = match.group()
+        if token.startswith("`"):
+            return f"<code>{token[1:-1]}</code>"
+        return f"<strong>{token[2:-2]}</strong>"
+    return re.sub(r"`[^`]+`|\*\*[^*\n]+\*\*", render, escaped)
 
 
 def _render_markdown(markdown: str) -> str:
@@ -98,10 +105,22 @@ def _chips(values: list[str], empty_text: str) -> str:
 
 
 def _render_dependencies(model: RepositoryModel) -> str:
-    if not model.dependencies:
+    dependencies = relevant_model(model).dependencies
+    all_dependencies = [*dependencies, *model.locked_dependencies]
+    if not all_dependencies:
         return '<p class="empty">No declared dependencies.</p>'
+    if len(all_dependencies) > 25 or not dependencies:
+        groups = aggregate_dependencies(all_dependencies, model.frameworks)
+        return "".join(
+            "<details>"
+            f"<summary>{_escape(group.name)} — {len(group.packages)} distinct packages "
+            f"({_escape(group.origin)})</summary>"
+            "<ul>" + "".join(f"<li>{_escape(name)}</li>" for name in group.packages) + "</ul>"
+            "</details>"
+            for group in groups
+        )
     rows = []
-    for item in model.dependencies:
+    for item in dependencies:
         rows.append(
             "<tr>"
             f"<td>{_escape(item.name)}</td>"
@@ -125,14 +144,37 @@ def _render_diagrams(diagrams: dict[str, str]) -> str:
     for name, source in diagrams.items():
         title = name.removesuffix(".mmd").replace("_", " ").title()
         sections.append(
+            '<article class="diagram-card">'
+            f"<h3>{_escape(title)}</h3>"
+            '<p class="diagram-status" role="status" aria-live="polite">'
+            "Preparing diagram…</p>"
+            '<div class="mermaid">'
+            f"{_escape(source)}"
+            "</div>"
+            '<button class="copy-mermaid" type="button">Copy Mermaid</button>'
             "<details>"
-            f"<summary>{_escape(title)}</summary>"
+            "<summary>View Source</summary>"
             '<pre class="diagram-source"><code>'
             f"{_escape(source)}"
             "</code></pre>"
-            "</details>"
+            "</details></article>"
         )
     return "\n".join(sections)
+
+
+def _render_areas(architecture: ArchitectureModel | None) -> str:
+    if architecture is None or not architecture.repository_relevance.areas:
+        return '<p class="empty">No project-specific module boundaries were inferred.</p>'
+    groups: dict[str, list[tuple[str, str]]] = {}
+    for area in architecture.repository_relevance.areas:
+        groups.setdefault(area.kind, []).append((area.name, area.path))
+    return "".join(
+        "<details>"
+        f"<summary>{_escape(kind.title())} — {len(areas)} areas</summary><ul>"
+        + "".join(f"<li>{_escape(name)} — <code>{_escape(path)}</code></li>" for name, path in areas)
+        + "</ul></details>"
+        for kind, areas in groups.items()
+    )
 
 
 def render_dashboard_html(
@@ -140,6 +182,7 @@ def render_dashboard_html(
     insights: OnboardingInsights,
     summary_markdown: str,
     diagrams: dict[str, str],
+    architecture: ArchitectureModel | None = None,
 ) -> str:
     """Render a portable dashboard with all content embedded in one HTML file."""
     learning_steps = "".join(
@@ -188,6 +231,11 @@ def render_dashboard_html(
     .step-number {{ display: grid; flex: 0 0 2rem; height: 2rem; place-items: center; border-radius: 50%; background: var(--accent); color: white; font-weight: 700; }}
     .step-card p {{ margin: 0; color: var(--muted); }}
     .empty {{ color: var(--muted); font-style: italic; }}
+    .diagram-card {{ margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: .6rem; }}
+    .diagram-card h3 {{ margin: 0; }}
+    .diagram-status {{ color: var(--muted); font-size: .9rem; }}
+    .mermaid {{ overflow-x: auto; }}
+    .copy-mermaid {{ margin: .5rem 0; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: .35rem; background: white; color: var(--accent); cursor: pointer; }}
     details {{ border-top: 1px solid var(--line); }}
     summary {{ padding: .85rem 0; color: var(--accent); cursor: pointer; font-weight: 650; }}
     pre {{ overflow-x: auto; margin: 0; padding: 1rem; background: #12263a; color: #e4eff8; border-radius: .5rem; font: .85rem/1.5 ui-monospace, monospace; }}
@@ -196,6 +244,45 @@ def render_dashboard_html(
     .summary-content pre {{ margin: .8rem 0; }}
     @media (max-width: 600px) {{ th, td {{ padding: .5rem; }} }}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
+    integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2"
+    crossorigin="anonymous" defer></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {{
+      const statuses = document.querySelectorAll(".diagram-status");
+      if (!window.mermaid) {{
+        statuses.forEach(status => {{
+          status.textContent = "Diagram renderer unavailable. Use View Source to access Mermaid text.";
+        }});
+      }} else {{
+        window.mermaid.initialize({{ startOnLoad: false, securityLevel: "strict" }});
+        window.mermaid.run({{ querySelector: ".mermaid" }}).then(() => {{
+          statuses.forEach(status => {{ status.textContent = ""; }});
+        }}).catch(error => {{
+          statuses.forEach(status => {{
+            status.textContent = "Diagram rendering failed: " + error.message;
+          }});
+        }});
+      }}
+
+      document.querySelectorAll(".copy-mermaid").forEach(button => {{
+        button.addEventListener("click", () => {{
+          const card = button.closest(".diagram-card");
+          const status = card.querySelector(".diagram-status");
+          const source = card.querySelector(".diagram-source code").textContent;
+          if (!navigator.clipboard) {{
+            status.textContent = "Clipboard unavailable. Open View Source to copy the Mermaid text.";
+            return;
+          }}
+          navigator.clipboard.writeText(source).then(() => {{
+            status.textContent = "Mermaid source copied.";
+          }}).catch(error => {{
+            status.textContent = "Copy failed: " + error.message;
+          }});
+        }});
+      }});
+    }});
+  </script>
 </head>
 <body>
   <header>
@@ -203,15 +290,34 @@ def render_dashboard_html(
     <p>Repository onboarding dashboard</p>
   </header>
   <nav aria-label="Dashboard sections">
-    <a href="#overview">Overview</a><a href="#languages">Languages</a>
-    <a href="#frameworks">Frameworks</a><a href="#dependencies">Dependencies</a>
-    <a href="#diagrams">Diagrams</a><a href="#learning-path">Learning Path</a>
-    <a href="#summary">Summary</a>
+    <a href="#overview">Overview</a><a href="#summary">Architecture</a>
+    <a href="#components">Primary Components</a><a href="#diagrams">Diagrams</a>
+    <a href="#learning-path">Learning Path</a>
+    <a href="#languages">Languages</a><a href="#frameworks">Frameworks</a>
+    <a href="#dependencies">Dependencies</a>
   </nav>
   <main>
     <section id="overview">
       <h2>Repository Overview</h2>
       <p class="overview">{_escape(overview)}</p>
+    </section>
+    <section id="summary">
+      <h2>Summary</h2>
+      <div class="summary-content">{_render_markdown(summary_markdown)}</div>
+    </section>
+    <section id="components">
+      <h2>Primary Components</h2>
+      <p>Project-owned areas are inferred from repository conventions.</p>
+      {_render_areas(architecture)}
+    </section>
+    <section id="diagrams">
+      <h2>Generated Mermaid Diagrams</h2>
+      <p class="empty">Diagrams render in your browser. Rendering uses a pinned Mermaid.js CDN asset; source remains available if it cannot load.</p>
+      {_render_diagrams(diagrams)}
+    </section>
+    <section id="learning-path">
+      <h2>Learning Path</h2>
+      {learning_steps}
     </section>
     <section id="languages">
       <h2>Detected Languages</h2>
@@ -224,19 +330,6 @@ def render_dashboard_html(
     <section id="dependencies">
       <h2>Dependencies</h2>
       {_render_dependencies(model)}
-    </section>
-    <section id="diagrams">
-      <h2>Generated Mermaid Diagrams</h2>
-      <p class="empty">Mermaid source is embedded below and can be copied into any Mermaid-compatible viewer.</p>
-      {_render_diagrams(diagrams)}
-    </section>
-    <section id="learning-path">
-      <h2>Learning Path</h2>
-      {learning_steps}
-    </section>
-    <section id="summary">
-      <h2>Summary</h2>
-      <div class="summary-content">{_render_markdown(summary_markdown)}</div>
     </section>
   </main>
 </body>

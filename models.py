@@ -57,6 +57,7 @@ class RepositoryModel:
     directories: list[str] = field(default_factory=list)
     files: list[RepositoryFile] = field(default_factory=list)
     detected_patterns: list[str] = field(default_factory=list)
+    locked_dependencies: list[Dependency] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -68,6 +69,10 @@ class RepositoryModel:
         filtered["dependencies"] = [
             item if isinstance(item, Dependency) else Dependency(**item)
             for item in filtered.get("dependencies", [])
+        ]
+        filtered["locked_dependencies"] = [
+            item if isinstance(item, Dependency) else Dependency(**item)
+            for item in filtered.get("locked_dependencies", [])
         ]
         filtered["files"] = [
             item if isinstance(item, RepositoryFile) else RepositoryFile(**item)
