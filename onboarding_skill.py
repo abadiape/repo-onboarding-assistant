@@ -6,7 +6,7 @@ Usage:
 
 Produces (in the output dir):
     summary.md, learning_path.md, repository_map.json, three Mermaid diagrams,
-    and manifest.json
+    dashboard.html, and manifest.json
 
 Returns a harness SkillResult with registered Artifacts.
 """
@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from models import RepositoryModel  # noqa: E402
+from dashboard import render_dashboard_html  # noqa: E402
 from onboarding_analyzer import (  # noqa: E402
     analyze_inventory,
     render_learning_path_markdown,
@@ -41,6 +42,7 @@ except ImportError:  # Fallback so the skill logic stays testable without the ha
         MARKDOWN = "markdown"
         JSON = "json"
         MERMAID = "mermaid"
+        HTML = "html"
 
     class Artifact:  # type: ignore[no-redef]
         def __init__(self, name, type, path, description="", metadata=None):
@@ -103,6 +105,7 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
     summary_path = out / "summary.md"
     learning_path_path = out / "learning_path.md"
     repo_map_path = out / "repository_map.json"
+    dashboard_path = out / "dashboard.html"
 
     summary_path.write_text(summary_md, encoding="utf-8")
     learning_path_path.write_text(learning_md, encoding="utf-8")
@@ -115,6 +118,10 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
         diagram_path = out / name
         diagram_path.write_text(content, encoding="utf-8")
         diagram_paths[name] = diagram_path
+    dashboard_path.write_text(
+        render_dashboard_html(model, insights, summary_md, diagrams),
+        encoding="utf-8",
+    )
 
     registry = ArtifactRegistry()
     registry.register(Artifact(
@@ -135,6 +142,12 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
             name=name, type=mermaid_type, path=str(diagram_path),
             description=f"Mermaid visualization generated from RepositoryModel: {name}.",
         ))
+    registry.register(Artifact(
+        name="dashboard.html",
+        type=getattr(ArtifactType, "HTML", "html"),
+        path=str(dashboard_path),
+        description="Standalone onboarding dashboard with embedded model artifacts.",
+    ))
 
     # Register the manifest after the first export, then re-export so it
     # lists itself along with the generated artifacts.

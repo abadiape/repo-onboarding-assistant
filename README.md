@@ -60,6 +60,8 @@ By default, the skill writes these artifacts to `outputs/`:
 - `module_graph.mmd` — directory and file containment in Mermaid
 - `architecture_overview.mmd` — technologies, major areas, entry points, and
   other recorded architecture facts in Mermaid
+- `dashboard.html` — self-contained onboarding dashboard with embedded
+  Mermaid sources and learning-path content
 - `manifest.json` — artifacts registered through the harness API
 
 Run the tests with:

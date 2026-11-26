@@ -57,6 +57,7 @@ Output (`outputs/` by default):
 - `module_graph.mmd` — directory and file containment in Mermaid
 - `architecture_overview.mmd` — technologies, major areas, and entry points in
   Mermaid
+- `dashboard.html` — self-contained onboarding dashboard
 - `manifest.json` — generated automatically through `ArtifactRegistry`
 
 The skill returns:
@@ -66,7 +67,8 @@ SkillResult(
     summary="Repository onboarding analysis completed",
     artifacts=[...],  # summary.md, learning_path.md, repository_map.json,
                       # dependency_graph.mmd, module_graph.mmd,
-                      # architecture_overview.mmd, manifest.json
+                      # architecture_overview.mmd, dashboard.html,
+                      # manifest.json
 )
 ```
 
