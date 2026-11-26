@@ -6,7 +6,9 @@ Placeholders use `{{name}}` style.
 ```markdown
 # Learning Path — {{repository_name}}
 
-Suggested step-by-step onboarding path for a new developer.
+Suggested step-by-step onboarding path for a new developer. Business domains,
+custom modules, and critical integrations lead the general architecture path
+when the repository contains enough evidence to identify them.
 
 {{#each learning_path}}
 ## Step {{step}}: {{title}}

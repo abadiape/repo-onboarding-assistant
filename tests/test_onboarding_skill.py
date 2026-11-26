@@ -32,6 +32,14 @@ def test_run_onboarding_end_to_end(tmp_path):
         "repository_map.json",
         "architecture_summary.md",
         "architecture_map.json",
+        "business_domains.md",
+        "business_capabilities.md",
+        "onboarding_priorities.md",
+        "domain_map.json",
+        "executive_summary.md",
+        "critical_modules.md",
+        "first_week_onboarding.md",
+        "business_insights.md",
         "system_overview.mmd",
         "execution_flow.mmd",
         "subsystem_map.mmd",
@@ -41,6 +49,8 @@ def test_run_onboarding_end_to_end(tmp_path):
     assert len(result.artifacts) == len(expected_artifacts)
     for expected in expected_artifacts:
         assert (out / expected).is_file(), f"missing {expected}"
+    first_week = (out / "first_week_onboarding.md").read_text(encoding="utf-8")
+    assert len(re.findall(r"^## Day \d:", first_week, re.MULTILINE)) == 5
 
     repo_map = json.loads((out / "repository_map.json").read_text(encoding="utf-8"))
     assert repo_map["repository_name"] == "sample"
