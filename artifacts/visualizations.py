@@ -5,7 +5,7 @@ scanning or infer source-level relationships.
 """
 from __future__ import annotations
 
-from models import RepositoryModel
+from models.models import RepositoryModel
 
 
 def _label(value: str) -> str:

@@ -4,8 +4,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models import RepositoryInventory
-from onboarding_analyzer import (
+from models.models import RepositoryInventory
+from analyzers.onboarding_analyzer import (
     analyze_inventory,
     render_learning_path_markdown,
     render_summary_markdown,

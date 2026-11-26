@@ -3,9 +3,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dashboard import render_dashboard_html
-from models import RepositoryModel
-from onboarding_analyzer import OnboardingInsights
+from artifacts.dashboard import render_dashboard_html
+from models.models import RepositoryModel
+from analyzers.onboarding_analyzer import OnboardingInsights
 
 
 def test_dashboard_renders_mermaid_and_preserves_escaped_source():

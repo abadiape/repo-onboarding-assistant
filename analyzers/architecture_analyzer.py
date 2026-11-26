@@ -6,14 +6,14 @@ import posixpath
 import re
 from pathlib import Path
 
-from architecture_model import (
+from models.architecture_model import (
     ArchitectureComponent,
     ArchitectureModel,
     ArchitectureRelationship,
     ArchitectureSubsystem,
 )
-from models import RepositoryModel
-from repository_relevance import analyze_relevance, relevant_model
+from models.models import RepositoryModel
+from analyzers.repository_relevance import analyze_relevance, relevant_model
 
 
 _CONCEPTS = {

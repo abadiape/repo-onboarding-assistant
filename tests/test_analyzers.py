@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from analyzers import (
+from analyzers.analyzers import (
     DEFAULT_ANALYZERS,
     GenericAnalyzer,
     NodeJsAnalyzer,
@@ -14,8 +14,8 @@ from analyzers import (
     PythonAnalyzer,
     select_analyzers,
 )
-from models import Dependency, RepositoryFile, RepositoryModel
-from repository_scan import scan_repository
+from models.models import Dependency, RepositoryFile, RepositoryModel
+from analyzers.repository_scan import scan_repository
 
 
 def test_selects_generic_and_matching_language_analyzers():

@@ -44,12 +44,12 @@ the project or its CI should be preferred when they disagree.
 
 ## Analyzer extensions
 
-`analyzers.py` runs `GenericAnalyzer` followed by each applicable language
+`analyzers/analyzers.py` runs `GenericAnalyzer` followed by each applicable language
 analyzer. Implement the small `Analyzer` interface (`supports` and `analyze`),
 then add the analyzer to `DEFAULT_ANALYZERS`; callers can also pass a custom
 analyzer sequence to `scan_repository`. Analyzers enrich `RepositoryModel`;
 artifact renderers consume that model separately from scanning.
-`architecture_analyzer.py` extracts a framework-aware `ArchitectureModel`
+`analyzers/architecture_analyzer.py` extracts a framework-aware `ArchitectureModel`
 from repository structure, patterns, public API exports, source references,
 and bounded README, documentation, and configuration evidence, then renders
 architecture artifacts from that intermediate model. It also recognizes feature
@@ -64,14 +64,14 @@ alone does not determine priority. The analyzer groups recognized roles into
 only the architectural layers supported by the detected components.
 Diagrams focus on the analyzed repository's components and inferred
 relationships, not the scanner pipeline or a dependency inventory.
-`domain_discovery.py` consumes project-owned module boundaries, repository
+`analyzers/domain_discovery.py` consumes project-owned module boundaries, repository
 documentation, source paths, and Architecture Discovery's external dependency
 facts to infer business domains, capabilities, and integration boundaries.
 These are convention-based suggestions with supporting evidence, not
 authoritative ownership or business rules. Domain Discovery is separate from
 Architecture Discovery and puts business-focused steps first in the learning
 path.
-`business_insights.py` scores evidence confidence separately from estimated
+`analyzers/business_insights.py` scores evidence confidence separately from estimated
 business impact and onboarding importance, then ranks modules and plans a
 first week. Human-readable reports show at most ten prioritized modules; the
 domain map retains the complete inventory. Scores are heuristic and do not
@@ -79,7 +79,7 @@ represent measured revenue or calibrated probabilities. Documentation-only
 mentions remain low impact unless supported by a custom module, source path, or
 Architecture Discovery integration evidence.
 
-`repository_relevance.py` classifies project, infrastructure, vendor, and
+`analyzers/repository_relevance.py` classifies project, infrastructure, vendor, and
 generated areas using path conventions. The scanner records vendor/generated
 directory boundaries but does not descend into them. Application architecture
 is inferred from the remaining paths; ownership and framework group labels
@@ -98,10 +98,14 @@ Run the skill from this directory:
 
 ```bash
 pip install -r requirements.txt
-python onboarding_skill.py /path/to/repository
-python onboarding_skill.py /path/to/repository --output-dir ./my-output
-python onboarding_skill.py /path/to/repository --module-graph app/code/Company/Module
+python skills/onboarding_skill.py /path/to/repository
+python skills/onboarding_skill.py /path/to/repository --output-dir ./my-output
+python skills/onboarding_skill.py /path/to/repository --module-graph app/code/Company/Module
 ```
+
+The entry point can also be run as `python -m skills.onboarding_skill` from
+the repository root. Skill metadata is in `skills/skill.yaml`; its entry point
+and capability paths are relative to that file.
 
 `--module-graph` is optional and accepts a detected repository-relative area
 listed in `architecture_map.json` or the dashboard. It generates
@@ -277,20 +281,15 @@ capability's assumptions part of the permanent inventory contract.
 
 ```text
 repo-onboarding-assistant/
-├── SKILL.md                 # Skill/runtime instructions
-├── skill.yaml               # Harness skill metadata
-├── onboarding_skill.py      # CLI, artifact generation, SkillResult boundary
-├── repository_scan.py       # Local repository scanner
-├── analyzers.py             # Generic and language-specific model enrichers
-├── onboarding_analyzer.py  # Onboarding heuristics and Markdown rendering
-├── domain_discovery.py      # Business domains, capabilities, and priorities
-├── business_insights.py    # Impact scoring, module ranking, and onboarding plan
-├── models.py                # RepositoryModel and normalized records
+├── skills/                  # Skill instructions, metadata, and CLI entry point
+├── analyzers/               # Scanning, analysis, domain and business logic
+├── models/                  # Repository and architecture data models
+├── artifacts/               # Dashboard and visualization renderers
 ├── templates/               # Reference output templates
 ├── outputs/                 # Default generated artifacts
 └── tests/                   # Scanner, analyzer, and end-to-end tests
 ```
 
-`SKILL.md` describes how the skill is invoked by its host. This README describes
+`skills/SKILL.md` describes how the skill is invoked by its host. This README describes
 the project, the current scanner boundary, and the planned evolution of the
 shared inventory.

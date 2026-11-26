@@ -24,23 +24,23 @@ heuristics, not probabilities, and conceptual flows are not runtime traces.
 
 ## How it works
 
-1. **Repository Scan Capability** (`repository_scan.py`, local to the skill) —
+1. **Repository Scan Capability** (`analyzers/repository_scan.py`) —
    convention-based inspection of filenames and manifest contents builds a
-   `RepositoryModel` (see `models.py`): repository metadata, languages,
+   `RepositoryModel` (see `models/models.py`): repository metadata, languages,
    frameworks, normalized dependencies, directories, file records, detected
    patterns, and onboarding details. Markdown setup guides are scanned for
    shell commands in relevant fenced code blocks, and CI YAML files are
    checked for inline `run` steps. Commands are reported with their source
-   and section and are never executed. `analyzers.py` then runs the generic
+   and section and are never executed. `analyzers/analyzers.py` then runs the generic
    analyzer and any applicable Node.js, Python, or PHP analyzer to enrich the
    model with framework, dependency-category, structure, and convention facts.
-2. **Onboarding Analyzer** (`onboarding_analyzer.py`) — heuristic insights on
+2. **Onboarding Analyzer** (`analyzers/onboarding_analyzer.py`) — heuristic insights on
    top of the model: summary, main technologies, learning path,
    files-to-read-first, project-specific setup guidance, and build/test cheat
    sheet.
-3. **Artifact Generation** (`onboarding_skill.py`) — writes artifacts via
+3. **Artifact Generation** (`skills/onboarding_skill.py`) — writes artifacts via
    `ArtifactRegistry` and returns a harness `SkillResult`.
-4. **System Architecture Analyzer** (`architecture_analyzer.py`) — extracts an
+4. **System Architecture Analyzer** (`analyzers/architecture_analyzer.py`) — extracts an
    `ArchitectureModel` from the repository model, framework metadata, layout,
    public API exports, source imports/type references, and listed
    docs/configuration, then generates architecture artifacts from that
@@ -52,12 +52,12 @@ heuristics, not probabilities, and conceptual flows are not runtime traces.
    otherwise Low. These are heuristic scores, as are relationship confidences.
    Layers group only recognized component roles. Inferred edges are not
    presented as source-level call edges.
-5. **Domain Discovery** (`domain_discovery.py`) — groups project-owned modules
+5. **Domain Discovery** (`analyzers/domain_discovery.py`) — groups project-owned modules
    and evidence from documentation, source paths, and inferred external
    dependencies into business domains, capabilities, and onboarding priorities.
    The findings are heuristic and complement rather than replace architecture
    analysis; business-focused steps lead the generated learning path.
-6. **Business Insights** (`business_insights.py`) — separates evidence
+6. **Business Insights** (`analyzers/business_insights.py`) — separates evidence
    confidence, estimated business impact, and onboarding importance; ranks
    critical modules and integrations; and generates a concise executive
    summary and five-day onboarding plan. Human-readable module lists are capped
@@ -78,10 +78,13 @@ indicate declared or locked packages, not necessarily installed packages.
 
 ```bash
 pip install llm-harness-lite pytest
-python onboarding_skill.py /path/to/repository
-python onboarding_skill.py /path/to/repository --output-dir ./my-output
-python onboarding_skill.py /path/to/repository --module-graph app/code/Company/Module
+python skills/onboarding_skill.py /path/to/repository
+python skills/onboarding_skill.py /path/to/repository --output-dir ./my-output
+python skills/onboarding_skill.py /path/to/repository --module-graph app/code/Company/Module
 ```
+
+Run these commands from the repository root. The module form
+`python -m skills.onboarding_skill` is also supported.
 
 The optional `--module-graph` argument must match an area in the architecture
 map and produces `module_graph.mmd`. Overview and subsystem diagrams are capped
@@ -167,15 +170,10 @@ are detected the same way.
 
 ```text
 repo-onboarding-assistant/
-├── SKILL.md
-├── skill.yaml
-├── onboarding_skill.py      # skill entrypoint + Artifact generation + CLI
-├── repository_scan.py       # Repository Scan Capability (local to skill)
-├── analyzers.py             # Generic and language-specific model enrichers
-├── onboarding_analyzer.py   # heuristic insights over the model
-├── domain_discovery.py      # business domains, capabilities, and priorities
-├── business_insights.py     # impact scoring, module ranking, and onboarding plan
-├── models.py                # RepositoryModel and normalized records
+├── skills/                  # skill instructions, metadata, and entry point
+├── analyzers/               # scanning, analysis, domain and business logic
+├── models/                  # repository and architecture data models
+├── artifacts/               # dashboard and visualization renderers
 ├── templates/               # reference Markdown skeletons
 ├── outputs/                 # generated artifacts (default target)
 └── tests/                   # pytest suite with synthetic fixture repos

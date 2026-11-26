@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from architecture_model import ArchitectureModel
-from models import RepositoryModel
-from repository_relevance import aggregate_dependencies, relevant_model
+from models.architecture_model import ArchitectureModel
+from models.models import RepositoryModel
+from analyzers.repository_relevance import aggregate_dependencies, relevant_model
 
 
 @dataclass

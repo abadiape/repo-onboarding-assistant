@@ -1,8 +1,8 @@
 """Skill entrypoint: scan a repository and generate onboarding artifacts.
 
 Usage:
-    python onboarding_skill.py /path/to/repository [--output-dir outputs]
-    python onboarding_skill.py /path/to/repository -o /tmp/my-output
+    python skills/onboarding_skill.py /path/to/repository [--output-dir outputs]
+    python skills/onboarding_skill.py /path/to/repository -o /tmp/my-output
 
 Produces (in the output dir):
     summary.md, learning_path.md, repository_map.json, architecture artifacts,
@@ -17,9 +17,10 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from architecture_analyzer import (
+from analyzers.architecture_analyzer import (
     extract_architecture,
     render_architecture_map_json,
     render_architecture_summary_markdown,
@@ -28,28 +29,28 @@ from architecture_analyzer import (
     render_subsystem_map_mermaid,
     render_system_overview_mermaid,
 )
-from business_insights import (
+from analyzers.business_insights import (
     analyze_business_insights,
     render_business_insights_markdown,
     render_critical_modules_markdown,
     render_executive_summary_markdown,
     render_first_week_onboarding_markdown,
 )
-from dashboard import render_dashboard_html
-from domain_discovery import (
+from artifacts.dashboard import render_dashboard_html
+from analyzers.domain_discovery import (
     analyze_domains,
     domain_learning_steps,
     render_business_capabilities_markdown,
     render_business_domains_markdown,
     render_onboarding_priorities_markdown,
 )
-from models import RepositoryModel
-from onboarding_analyzer import (  # noqa: E402
+from models.models import RepositoryModel
+from analyzers.onboarding_analyzer import (
     analyze_inventory,
     render_learning_path_markdown,
     render_summary_markdown,
 )
-from repository_scan import scan_repository  # noqa: E402
+from analyzers.repository_scan import scan_repository
 
 try:
     from llm_harness_lite import Artifact, ArtifactRegistry, ArtifactType, SkillResult

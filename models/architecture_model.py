@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from typing import Any
-from repository_relevance import RepositoryRelevance
+from analyzers.repository_relevance import RepositoryRelevance
 
 
 @dataclass
