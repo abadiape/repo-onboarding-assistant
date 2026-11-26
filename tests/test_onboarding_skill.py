@@ -77,6 +77,12 @@ def test_run_onboarding_end_to_end(tmp_path):
         "critical_modules.md",
         "first_week_onboarding.md",
         "business_insights.md",
+        "business_story.md",
+        "critical_workflows.md",
+        "first_week_story.md",
+        "repository_story.md",
+        "business_risk_story.md",
+        "first_day_briefing.md",
         "system_overview.mmd",
         "execution_flow.mmd",
         "subsystem_map.mmd",
@@ -88,6 +94,20 @@ def test_run_onboarding_end_to_end(tmp_path):
         assert (out / expected).is_file(), f"missing {expected}"
     first_week = (out / "first_week_onboarding.md").read_text(encoding="utf-8")
     assert len(re.findall(r"^## Day \d:", first_week, re.MULTILINE)) == 5
+    story = (out / "business_story.md").read_text(encoding="utf-8")
+    assert "## What This System Does" in story
+    assert "## Core Business Flow" in story
+    assert "## Primary Domains" in story
+    assert "## Critical Integrations" in story
+    assert "## What Matters Most" in story
+    workflows = (out / "critical_workflows.md").read_text(encoding="utf-8")
+    assert "Onboarding significance" in workflows or "No actionable business capability" in workflows
+    first_week_story = (out / "first_week_story.md").read_text(encoding="utf-8")
+    assert len(re.findall(r"^## Day \d:", first_week_story, re.MULTILINE)) == 5
+    briefing = (out / "first_day_briefing.md").read_text(encoding="utf-8")
+    assert "## 1. What This Repository Appears to Do" in briefing
+    assert "## 5. Recommended Learning Sequence" in briefing
+    assert len(briefing.split()) < 500
 
     repo_map = json.loads((out / "repository_map.json").read_text(encoding="utf-8"))
     assert repo_map["repository_name"] == "sample"
@@ -113,6 +133,14 @@ def test_run_onboarding_end_to_end(tmp_path):
         for artifact in manifest["artifacts"]
         if artifact["name"].endswith(".mmd")
     )
+    assert {
+        "business_story.md",
+        "critical_workflows.md",
+        "first_week_story.md",
+        "repository_story.md",
+        "business_risk_story.md",
+        "first_day_briefing.md",
+    } <= {artifact["name"] for artifact in manifest["artifacts"]}
     dashboard = (out / "dashboard.html").read_text(encoding="utf-8")
     assert "<!doctype html>" in dashboard.lower()
     assert "Repository Overview" in dashboard

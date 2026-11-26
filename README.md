@@ -72,12 +72,23 @@ authoritative ownership or business rules. Domain Discovery is separate from
 Architecture Discovery and puts business-focused steps first in the learning
 path.
 `analyzers/business_insights.py` scores evidence confidence separately from estimated
-business impact and onboarding importance, then ranks modules and plans a
-first week. Human-readable reports show at most ten prioritized modules; the
-domain map retains the complete inventory. Scores are heuristic and do not
+business impact (Critical, High, Medium, or Low) and onboarding importance, then
+ranks modules and plans a first week. Impact reflects workflow categories, not
+confidence: payment and order workflows are rated Critical; inventory, ERP,
+shipping, and customer workflows are High when there is direct evidence.
+Module recommendations favor domain representatives and use name-based
+heuristics to defer some supporting customizations; they do not prove a module's
+runtime role. Human-readable reports show at most ten prioritized modules; the
+domain map retains the complete inventory. Domain evidence is available in
+expandable report sections and the domain map. Scores are heuristic and do not
 represent measured revenue or calibrated probabilities. Documentation-only
 mentions remain low impact unless supported by a custom module, source path, or
-Architecture Discovery integration evidence.
+Architecture Discovery integration evidence. Integration criticality and runtime
+activation must be confirmed with maintainers.
+`analyzers/narrative_generation.py` combines architecture, domain-discovery, and
+business-insight findings into repository-specific stories, workflow guides,
+and onboarding briefs. Module/domain links and inferred flows remain
+onboarding hypotheses, not observed runtime call order or operational risk.
 
 `analyzers/repository_relevance.py` classifies project, infrastructure, vendor, and
 generated areas using path conventions. The scanner records vendor/generated
@@ -129,8 +140,8 @@ By default, the skill writes these artifacts to `outputs/`:
   a confidence score and supporting evidence; components also include relevance
   and significance scores and locations, plus repository relevance and grouped
   dependency information
-- `business_domains.md` — inferred business responsibilities, related modules,
-  priorities, and evidence
+- `business_domains.md` — inferred responsibilities, business value, impact,
+  starting modules, learning guidance, and expandable evidence
 - `business_capabilities.md` — capabilities grouped by business workflow and
   inferred external ownership boundaries
 - `onboarding_priorities.md` — a suggested one-week business-first learning
@@ -144,6 +155,18 @@ By default, the skill writes these artifacts to `outputs/`:
 - `first_week_onboarding.md` — a five-day business-focused onboarding plan
 - `business_insights.md` — prioritized value areas, integration boundaries, and
   maintainer-confirmable recommendations
+- `business_story.md` — inferred system purpose, business flow, primary domains,
+  critical integrations, and first-focus recommendations
+- `critical_workflows.md` — capability-based workflow guides with involved
+  domains, modules, and onboarding significance
+- `first_week_story.md` — a five-day learning sequence grounded in discovered
+  business priorities
+- `repository_story.md` — repository-specific business flow, domain evidence,
+  detected patterns, and prioritized customizations
+- `business_risk_story.md` — inferred areas of business sensitivity for
+  onboarding, not an operational risk assessment
+- `first_day_briefing.md` — concise first-day overview and recommended learning
+  sequence
 - `system_overview.mmd` — high-level component relationship diagram
 - `execution_flow.mmd` — inferred application execution sequence
 - `subsystem_map.mmd` — components grouped by architectural boundary

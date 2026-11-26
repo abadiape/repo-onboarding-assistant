@@ -36,6 +36,15 @@ from analyzers.business_insights import (
     render_executive_summary_markdown,
     render_first_week_onboarding_markdown,
 )
+from analyzers.narrative_generation import (
+    generate_business_narrative,
+    render_business_story_markdown,
+    render_business_risk_story_markdown,
+    render_critical_workflows_markdown,
+    render_first_day_briefing_markdown,
+    render_first_week_story_markdown,
+    render_repository_story_markdown,
+)
 from artifacts.dashboard import render_dashboard_html
 from analyzers.domain_discovery import (
     analyze_domains,
@@ -145,7 +154,7 @@ def run_onboarding(
         step["step"] = index
     summary_md = render_summary_markdown(model, insights)
     learning_md = render_learning_path_markdown(model, insights)
-    business_domains_md = render_business_domains_markdown(domains)
+    business_domains_md = render_business_domains_markdown(domains, insights=business_insights)
     business_capabilities_md = render_business_capabilities_markdown(domains)
     onboarding_priorities_md = render_onboarding_priorities_markdown(
         domains,
@@ -159,6 +168,13 @@ def run_onboarding(
     critical_modules_md = render_critical_modules_markdown(business_insights)
     first_week_onboarding_md = render_first_week_onboarding_markdown(business_insights)
     business_insights_md = render_business_insights_markdown(business_insights)
+    narrative = generate_business_narrative(architecture, domains, business_insights)
+    business_story_md = render_business_story_markdown(narrative)
+    critical_workflows_md = render_critical_workflows_markdown(narrative)
+    first_week_story_md = render_first_week_story_markdown(narrative)
+    repository_story_md = render_repository_story_markdown(narrative)
+    business_risk_story_md = render_business_risk_story_markdown(narrative)
+    first_day_briefing_md = render_first_day_briefing_markdown(narrative)
     architecture_summary_md = render_architecture_summary_markdown(architecture)
     diagrams = {
         "system_overview.mmd": render_system_overview_mermaid(architecture),
@@ -180,6 +196,12 @@ def run_onboarding(
     critical_modules_path = out / "critical_modules.md"
     first_week_onboarding_path = out / "first_week_onboarding.md"
     business_insights_path = out / "business_insights.md"
+    business_story_path = out / "business_story.md"
+    critical_workflows_path = out / "critical_workflows.md"
+    first_week_story_path = out / "first_week_story.md"
+    repository_story_path = out / "repository_story.md"
+    business_risk_story_path = out / "business_risk_story.md"
+    first_day_briefing_path = out / "first_day_briefing.md"
     domain_map_path = out / "domain_map.json"
     dashboard_path = out / "dashboard.html"
 
@@ -200,6 +222,12 @@ def run_onboarding(
     critical_modules_path.write_text(critical_modules_md, encoding="utf-8")
     first_week_onboarding_path.write_text(first_week_onboarding_md, encoding="utf-8")
     business_insights_path.write_text(business_insights_md, encoding="utf-8")
+    business_story_path.write_text(business_story_md, encoding="utf-8")
+    critical_workflows_path.write_text(critical_workflows_md, encoding="utf-8")
+    first_week_story_path.write_text(first_week_story_md, encoding="utf-8")
+    repository_story_path.write_text(repository_story_md, encoding="utf-8")
+    business_risk_story_path.write_text(business_risk_story_md, encoding="utf-8")
+    first_day_briefing_path.write_text(first_day_briefing_md, encoding="utf-8")
     domain_map_path.write_text(
         json.dumps(
             {
@@ -291,6 +319,36 @@ def run_onboarding(
             "business_insights.md",
             business_insights_path,
             "Evidence-based business impact and onboarding recommendations.",
+        ),
+        (
+            "business_story.md",
+            business_story_path,
+            "Narrative explanation of the inferred business purpose, flow, and priorities.",
+        ),
+        (
+            "critical_workflows.md",
+            critical_workflows_path,
+            "Capability-based workflow guides with domains, modules, and onboarding significance.",
+        ),
+        (
+            "first_week_story.md",
+            first_week_story_path,
+            "Narrative five-day learning sequence based on discovered business priorities.",
+        ),
+        (
+            "repository_story.md",
+            repository_story_path,
+            "Repository-specific explanation of business flows, domains, and customizations.",
+        ),
+        (
+            "business_risk_story.md",
+            business_risk_story_path,
+            "Heuristic onboarding sensitivity narrative for directly supported business areas.",
+        ),
+        (
+            "first_day_briefing.md",
+            first_day_briefing_path,
+            "Concise first-day introduction to this repository's business areas and learning order.",
         ),
     ):
         registry.register(Artifact(

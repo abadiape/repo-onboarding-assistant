@@ -5,11 +5,16 @@ from dataclasses import asdict, dataclass, field
 from pathlib import PurePosixPath
 
 from models.architecture_model import ArchitectureModel
-from analyzers.domain_discovery import BusinessCapability, DomainDiscovery
+from analyzers.domain_discovery import BusinessCapability, DomainDiscovery, _tokens
 
 
-_HIGH_IMPACT_DOMAINS = {
-    "Payments", "Orders", "Inventory", "ERP Integrations", "Shipping",
+_DOMAIN_IMPACTS = {
+    "Payments": "Critical",
+    "Orders": "Critical",
+    "Inventory": "High",
+    "ERP Integrations": "High",
+    "Shipping": "High",
+    "Customer Experience": "High",
 }
 _DOMAIN_RATIONALES = {
     "Payments": "Payment and transaction customizations can affect revenue collection.",
@@ -17,10 +22,23 @@ _DOMAIN_RATIONALES = {
     "Inventory": "Stock availability can affect purchasability and fulfillment.",
     "ERP Integrations": "External synchronization can affect order and inventory operations.",
     "Shipping": "Fulfillment and delivery workflows affect order completion.",
+    "Customer Experience": "Customer accounts and registration affect access and retention.",
+    "Catalog": "Product information influences what customers can find and purchase.",
+    "Marketing": "Promotions and campaigns can influence customer acquisition and sales.",
+    "Search": "Search helps customers discover relevant products and content.",
+    "Loyalty": "Rewards can encourage customer retention and repeat purchases.",
 }
 _IMPORTANCE_RANK = {"Very High": 4, "High": 3, "Medium": 2, "Low": 1}
-_IMPACT_RANK = {"High": 3, "Medium": 2, "Low": 1}
+_IMPACT_RANK = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
 _MODULE_TIER_RANK = {"Business Critical": 3, "Important": 2, "Supporting": 1}
+_DOMAIN_ORDER = {
+    name: index for index, name in enumerate(
+        ("Payments", "Orders", "ERP Integrations", "Inventory", "Shipping", "Customer Experience")
+    )
+}
+_SUPPORTING_MODULE_TOKENS = {
+    "attribute", "attributes", "clean", "cleanup", "mail", "price", "schedule", "trigger",
+}
 _MAX_CRITICAL_MODULES = 10
 _SOURCE_SUFFIXES = {".cs", ".go", ".java", ".js", ".php", ".py", ".rb", ".rs", ".ts"}
 
@@ -34,6 +52,10 @@ class DomainImpact:
     rationale: str
     modules: list[str] = field(default_factory=list)
     integrations: list[str] = field(default_factory=list)
+    description: str = ""
+    starting_module: str | None = None
+    learning_order: list[str] = field(default_factory=list)
+    learning_recommendation: str = ""
 
 
 @dataclass
@@ -45,6 +67,7 @@ class ModulePriority:
     business_impact: str
     domains: list[str] = field(default_factory=list)
     rationale: str = ""
+    recommendation: str = ""
 
 
 @dataclass
@@ -54,6 +77,7 @@ class BusinessInsights:
     ranked_modules: list[ModulePriority] = field(default_factory=list)
     critical_integrations: list[dict[str, str | list[str]]] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
+    frameworks: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -93,13 +117,10 @@ def analyze_business_insights(
         has_direct_evidence = bool(
             domain.modules or related_integrations or source_evidence_count
         )
-        impact = (
-            "High" if has_direct_evidence and domain.name in _HIGH_IMPACT_DOMAINS
-            else "Medium" if has_direct_evidence else "Low"
-        )
+        impact = _DOMAIN_IMPACTS.get(domain.name, "Medium") if has_direct_evidence else "Low"
         importance = (
-            "Very High" if impact == "High" and domain.modules
-            else "High" if impact == "High" or domain.modules or related_integrations
+            "Very High" if impact in {"Critical", "High"} and domain.modules
+            else "High" if impact in {"Critical", "High"} or domain.modules or related_integrations
             else "Medium" if impact == "Medium" else "Low"
         )
         rationale = _DOMAIN_RATIONALES.get(
@@ -124,10 +145,12 @@ def analyze_business_insights(
             rationale=rationale,
             modules=sorted(domain.modules, key=str.casefold),
             integrations=sorted(related_integrations, key=str.casefold),
+            description=" ".join(domain.responsibilities) or "No responsibility was inferred.",
         ))
     domain_impacts.sort(key=lambda item: (
         -_IMPORTANCE_RANK[item.onboarding_importance],
         -_IMPACT_RANK[item.business_impact],
+        _DOMAIN_ORDER.get(item.name, len(_DOMAIN_ORDER)),
         item.name.casefold(),
     ))
     impact_by_name = {item.name: item for item in domain_impacts}
@@ -142,12 +165,13 @@ def analyze_business_insights(
         owners.sort(key=lambda item: (
             -_IMPORTANCE_RANK[item.onboarding_importance],
             -_IMPACT_RANK[item.business_impact],
+            _DOMAIN_ORDER.get(item.name, len(_DOMAIN_ORDER)),
             item.name.casefold(),
         ))
         domain_names = [item.name for item in owners]
         impact = owners[0].business_impact if owners else "Low"
         confidence = max((item.confidence for item in owners), default=0.35)
-        if impact == "High" and owners[0].onboarding_importance == "Very High":
+        if impact in {"Critical", "High"} and owners[0].onboarding_importance == "Very High":
             tier = "Business Critical"
         elif owners:
             tier = "Important"
@@ -169,12 +193,53 @@ def analyze_business_insights(
             business_impact=impact,
             domains=domain_names,
             rationale=rationale,
+            recommendation=(
+                f"Study this module before changing {owners[0].name} workflows; "
+                "confirm its role with a maintainer."
+                if owners else
+                "Defer this module until a relevant workflow or maintainer points to it."
+            ),
         ))
     module_priorities.sort(key=lambda item: (
         -_MODULE_TIER_RANK[item.tier],
-        -item.confidence,
+        -_IMPACT_RANK[item.business_impact],
+        bool(_tokens(item.name) & _SUPPORTING_MODULE_TOKENS),
         item.name.casefold(),
+        item.path.casefold(),
     ))
+    for domain in domain_impacts:
+        domain.learning_order = list(dict.fromkeys(
+            item.name for item in module_priorities if domain.name in item.domains
+        ))
+        domain.starting_module = next(iter(domain.learning_order), None)
+        if domain.starting_module:
+            domain.learning_recommendation = (
+                f"Start with {domain.starting_module}, then trace a workflow in {domain.name} "
+                "and confirm the module's role with a maintainer."
+            )
+        else:
+            domain.learning_recommendation = (
+                "No starting module was identified; ask a maintainer where to trace this workflow."
+            )
+
+    # Give the first representative of each important domain a place before
+    # listing additional modules from the same domain.
+    representatives = []
+    seen_paths = set()
+    for domain in domain_impacts:
+        if domain.onboarding_importance not in {"Very High", "High"}:
+            continue
+        representative = next(
+            (item for item in module_priorities
+             if domain.name in item.domains and item.path not in seen_paths),
+            None,
+        )
+        if representative:
+            representatives.append(representative)
+            seen_paths.add(representative.path)
+    module_priorities = representatives + [
+        item for item in module_priorities if item.path not in seen_paths
+    ]
     capability_rank = {"high": 0, "medium": 1, "low": 2}
     capabilities = sorted(
         [
@@ -211,7 +276,7 @@ def analyze_business_insights(
         ]
         integration_priority = (
             "Business Critical"
-            if any(impact_by_name[name].business_impact == "High" for name in related_domains)
+            if any(impact_by_name[name].business_impact in {"Critical", "High"} for name in related_domains)
             else "Important" if related_domains else "Supporting"
         )
         if integration_priority == "Business Critical":
@@ -225,7 +290,7 @@ def analyze_business_insights(
     recommendations = []
     for domain in domain_impacts:
         if domain.onboarding_importance in {"Very High", "High"}:
-            modules = ", ".join(domain.modules[:3])
+            modules = ", ".join(domain.learning_order[:3])
             integrations = ", ".join(domain.integrations[:2])
             focus = "; ".join(
                 part for part in (
@@ -255,6 +320,7 @@ def analyze_business_insights(
         ranked_modules=module_priorities,
         critical_integrations=critical_integrations,
         recommendations=recommendations,
+        frameworks=architecture.frameworks,
     )
 
 
@@ -263,9 +329,9 @@ def render_executive_summary_markdown(
 ) -> str:
     high_value = [
         item for item in insights.domain_impacts
-        if item.business_impact == "High"
+        if item.business_impact in {"Critical", "High"}
     ][:4]
-    top_modules = insights.ranked_modules[:3]
+    top_modules = [item for item in insights.ranked_modules if item.tier != "Supporting"][:4]
     description = architecture.description.strip() or (
         f"{architecture.system_name} is a {architecture.system_type} repository."
     )
@@ -273,14 +339,18 @@ def render_executive_summary_markdown(
         f"# Executive Summary — {architecture.system_name}",
         "",
         description,
-        "",
-        "## Where business value appears concentrated",
-        "",
     ]
+    if architecture.frameworks and insights.ranked_modules:
+        lines += [
+            "",
+            "The detected " + ", ".join(architecture.frameworks)
+            + " architecture includes project-owned modules; their business roles are inferred below.",
+        ]
+    lines += ["", "## Where business value appears concentrated", ""]
     if high_value:
         lines += [
             f"- **{item.name}** — {item.rationale} "
-            f"(onboarding importance: {item.onboarding_importance}; "
+            f"(business impact: {item.business_impact}; "
             f"evidence confidence: {item.confidence:.0%}, heuristic)"
             for item in high_value
         ]
@@ -302,7 +372,23 @@ def render_executive_summary_markdown(
             "Critical integration boundaries: "
             + ", ".join(item["name"] for item in insights.critical_integrations[:4]),
         ]
+    else:
+        erp = next(
+            (item for item in insights.domain_impacts
+             if item.name == "ERP Integrations" and item.business_impact in {"Critical", "High"}),
+            None,
+        )
+        lines += ["", (
+            "ERP integration workflows were inferred, but no specific business-critical external "
+            "service was identified; confirm the integration boundary with a maintainer."
+            if erp else
+            "No business-critical external integration was identified; confirm integration "
+            "boundaries with a maintainer."
+        )]
     lines += [
+        "",
+        "Defer framework internals and vendor or generated code initially, where present; "
+        "revisit them when a task requires it.",
         "",
         "Scores summarize repository evidence, not measured revenue or calibrated probabilities. "
         "Confirm operational importance and ownership with maintainers.",
@@ -332,9 +418,11 @@ def render_critical_modules_markdown(insights: BusinessInsights) -> str:
                 f"### {module.name}",
                 "",
                 f"- **Domain ownership:** {', '.join(module.domains) or 'Unassigned'}",
+                f"- **Module location:** `{module.path}`",
                 f"- **Business impact:** {module.business_impact}",
-                f"- **Evidence confidence:** {module.confidence:.0%} (heuristic)",
+                f"- **Related domain evidence confidence:** {module.confidence:.0%} (heuristic)",
                 f"- **Rationale:** {module.rationale}",
+                f"- **Recommendation:** {module.recommendation}",
                 "",
             ]
     omitted = len(insights.ranked_modules) - len(modules)
@@ -351,98 +439,45 @@ def render_first_week_onboarding_markdown(insights: BusinessInsights) -> str:
         item for item in insights.domain_impacts
         if item.onboarding_importance in {"Very High", "High"}
     ]
-    selected_domains = actionable_domains[:3]
-    top_modules = insights.ranked_modules[:_MAX_CRITICAL_MODULES]
-    high_value_modules = [
-        item.name for item in top_modules if item.tier == "Business Critical"
-    ]
-    day_two = selected_domains[0] if selected_domains else None
-    day_three = selected_domains[1] if len(selected_domains) > 1 else None
-    day_four = selected_domains[2] if len(selected_domains) > 2 else None
+    selected_domains = actionable_domains[:4]
+    framework = ", ".join(insights.frameworks) if insights.frameworks else "the application"
     days = [
         {
-            "title": "Product context and system boundary",
+            "title": "Product context and architecture",
             "detail": (
-                "Read the executive summary and confirm the product’s primary users, "
-                "revenue flows, and deployment context with a maintainer."
-            ),
-        },
-        {
-            "title": f"Review {day_two.name}" if day_two else "Identify the main business capability",
-            "detail": (
-                f"Understand why this {day_two.business_impact.lower()}-impact domain matters; "
-                f"start with {', '.join(day_two.modules[:3]) or 'the modules listed for this domain'}."
-                if day_two else
-                "Use the README and ask a maintainer to name the primary customer or operational workflow."
+                f"Understand {framework} architecture and its module or component boundaries. "
+                "Read the executive summary and confirm the primary users and workflows with a maintainer."
             ),
         },
     ]
-    if insights.critical_integrations:
-        integration = insights.critical_integrations[0]
-        integration_detail = (
-            f"Follow {integration['name']} across the "
-            f"{', '.join(integration['domains']) or 'application'} boundary. "
-            "Confirm runtime activation and ownership before changing behavior."
-        )
-        if day_three:
-            integration_detail += (
-                f" Then review {day_three.name}: "
-                f"{', '.join(day_three.modules[:3]) or 'see the domain map'}."
+    for domain in selected_domains:
+        detail = f"{domain.rationale} {domain.learning_recommendation}"
+        integrations = [
+            item["name"] for item in insights.critical_integrations
+            if domain.name in item["domains"]
+        ]
+        if integrations:
+            detail += (
+                f" Trace a critical integration: {', '.join(integrations[:2])}. "
+                "Confirm runtime activation and ownership."
             )
-        days.append({
-            "title": "Trace a critical integration",
-            "detail": integration_detail,
-        })
-    elif day_three:
-        days.append({
-            "title": f"Understand {day_three.name}",
-            "detail": (
-                f"Review its business responsibilities and customizations: "
-                f"{', '.join(day_three.modules[:3]) or 'see the domain map'}."
-            ),
-        })
-    else:
-        days.append({
-            "title": "Clarify ownership and change boundaries",
-            "detail": (
-                "Choose one feature and ask who owns its behavior, which downstream systems it affects, "
-                "and how its changes are verified."
-            ),
-        })
-    if day_four:
-        days.append({
-            "title": f"Understand {day_four.name}",
-            "detail": (
-                f"Review its responsibilities and customizations: "
-                f"{', '.join(day_four.modules[:3]) or 'see the domain map'}."
-            ),
-        })
-    else:
-        days.append({
-            "title": "Review verification and delivery",
-            "detail": "Run the documented tests and inspect how CI or deployment validates the workflows you reviewed.",
-        })
-    workflow_detail = (
-        "Trace an end-to-end capability through its domain modules and integration boundaries."
-    )
-    actionable_capabilities = [
-        item for item in insights.capabilities if item.priority != "low"
+        elif domain.name == "ERP Integrations":
+            detail += (
+                " Trace the external ERP boundary and confirm the system, runtime activation, "
+                "and ownership with a maintainer."
+            )
+        days.append({"title": f"Understand {domain.name}", "detail": detail})
+    fallback_days = [
+        ("Identify the main business capability", "Ask a maintainer which customer or operational workflow matters most."),
+        ("Clarify ownership and change boundaries", "Choose a feature and confirm its owner and downstream systems."),
+        ("Trace a business workflow", "Follow a capability through its application and integration boundaries."),
+        ("Review verification and delivery", "Run documented tests and review how changes are validated."),
     ]
-    if actionable_capabilities:
-        workflow_detail = (
-            "Trace " + ", ".join(item.name for item in actionable_capabilities[:3])
-            + " through its domain modules and integration boundaries."
-        )
-    remaining = [item.name for item in selected_domains[3:]]
-    if remaining:
-        workflow_detail = f"Also orient on {', '.join(remaining[:3])}. " + workflow_detail
-    if high_value_modules:
-        workflow_detail += " Begin with " + ", ".join(high_value_modules[:3]) + "."
-    workflow_detail += " Run the project’s documented tests before making a change."
-    days.append({
-        "title": "Follow a business workflow end to end",
-        "detail": workflow_detail,
-    })
+    for title, detail in fallback_days:
+        if len(days) == 5:
+            break
+        days.append({"title": title, "detail": detail})
+    days[-1]["detail"] += " Run the project's documented tests before making a change."
     lines = [
         "# First-Week Onboarding",
         "",
@@ -464,7 +499,7 @@ def render_business_insights_markdown(insights: BusinessInsights) -> str:
     ]
     high_domains = [
         item for item in insights.domain_impacts
-        if item.business_impact == "High"
+        if item.business_impact in {"Critical", "High"}
     ][:5]
     if high_domains:
         lines += ["## Highest-value areas to understand", ""]
@@ -476,7 +511,7 @@ def render_business_insights_markdown(insights: BusinessInsights) -> str:
                 if integration_names else ""
             )
             lines.append(
-                f"- **{domain.name}** is an inferred high-impact area. "
+                f"- **{domain.name}** — {domain.rationale} "
                 f"Matched custom modules: {module_names}.{integration_detail} "
                 f"Onboarding importance is {domain.onboarding_importance} "
                 f"with {domain.confidence:.0%} evidence confidence."
@@ -491,6 +526,17 @@ def render_business_insights_markdown(insights: BusinessInsights) -> str:
                 f"boundary and is associated with {domain_list}. Confirm its runtime use and owner."
             )
         lines.append("")
+    elif any(
+        item.name == "ERP Integrations" and item.business_impact in {"Critical", "High"}
+        for item in insights.domain_impacts
+    ):
+        lines += [
+            "## Integration workflows to investigate",
+            "",
+            "ERP integration workflows were inferred, but no specific external service was identified. "
+            "Confirm the boundary, runtime activation, and owner with a maintainer.",
+            "",
+        ]
     actionable_capabilities = [
         item for item in insights.capabilities if item.priority != "low"
     ]
