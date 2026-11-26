@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from architecture_model import ArchitectureModel
 from models import RepositoryModel
+from repository_relevance import aggregate_dependencies, relevant_model
 
 
 @dataclass
@@ -21,7 +23,10 @@ class OnboardingInsights:
     open_questions: list[str] = field(default_factory=list)
 
 
-def analyze_inventory(inv: RepositoryModel) -> OnboardingInsights:
+def analyze_inventory(
+    inv: RepositoryModel, architecture: ArchitectureModel | None = None
+) -> OnboardingInsights:
+    inv = relevant_model(inv)
     techs = [*inv.languages, *inv.frameworks]
     if inv.package_managers:
         techs.append(f"managed with {', '.join(inv.package_managers)}")
@@ -43,13 +48,33 @@ def analyze_inventory(inv: RepositoryModel) -> OnboardingInsights:
     if inv.readme_summary:
         summary += f" README description: {inv.readme_summary}"
 
-    if inv.top_level_directories:
+    if architecture and architecture.layers:
+        summary += " Inferred architectural layers: " + ", ".join(
+            layer.name for layer in architecture.layers[:5]
+        ) + "."
+    if architecture and architecture.repository_relevance.areas:
+        areas = architecture.repository_relevance.areas
+        summary += " Project-owned modules and business areas include " + ", ".join(
+            f"{area.name} ({area.path})" for area in areas[:6]
+        ) + (f", and {len(areas) - 6} more." if len(areas) > 6 else ".")
+    elif inv.top_level_directories:
         summary += f" Top-level areas: {', '.join(inv.top_level_directories[:8])}."
+    if architecture and architecture.repository_relevance.paths.get("low"):
+        summary += " Vendor and third-party code is supporting material; begin with project-owned areas."
     if inv.entry_points:
         summary += f" Likely entry point(s): {', '.join(inv.entry_points[:3])}."
 
     files_first = _files_to_read_first(inv)
     learning_path = _learning_path(inv, files_first)
+    if architecture and architecture.repository_relevance.areas:
+        areas = architecture.repository_relevance.areas
+        learning_path.insert(1, {
+            "step": 0,
+            "title": "Explore project-owned areas",
+            "detail": "Start with " + ", ".join(f"`{area.path}`" for area in areas[:6]) + ".",
+        })
+        for index, step in enumerate(learning_path, 1):
+            step["step"] = index
     open_questions = _open_questions(inv)
 
     return OnboardingInsights(
@@ -170,13 +195,21 @@ def render_summary_markdown(inv: RepositoryModel, insights: OnboardingInsights) 
         lines += [f"- {t}" for t in insights.main_technologies]
     else:
         lines.append("- _None detected_")
-    if inv.dependencies:
+    dependencies = relevant_model(inv).dependencies
+    all_dependencies = [*dependencies, *inv.locked_dependencies]
+    if len(all_dependencies) > 25 or (all_dependencies and not dependencies):
+        lines += ["", "## Dependency groups", ""]
+        lines += [
+            f"- {group.name}: {len(group.packages)} distinct packages"
+            for group in aggregate_dependencies(all_dependencies, inv.frameworks)
+        ]
+    elif dependencies:
         lines += ["", "## Dependencies", ""]
         lines += [
             f"- `{dependency.name}`"
             + (f" `{dependency.version}`" if dependency.version else "")
             + f" ({dependency.scope}; `{dependency.source}`)"
-            for dependency in inv.dependencies
+            for dependency in dependencies
         ]
     if inv.detected_patterns:
         lines += ["", "## Detected patterns", ""]

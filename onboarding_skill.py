@@ -5,7 +5,7 @@ Usage:
     python onboarding_skill.py /path/to/repository -o /tmp/my-output
 
 Produces (in the output dir):
-    summary.md, learning_path.md, repository_map.json, three Mermaid diagrams,
+    summary.md, learning_path.md, repository_map.json, architecture artifacts,
     dashboard.html, and manifest.json
 
 Returns a harness SkillResult with registered Artifacts.
@@ -19,19 +19,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from models import RepositoryModel  # noqa: E402
-from dashboard import render_dashboard_html  # noqa: E402
+from architecture_analyzer import (
+    extract_architecture,
+    render_architecture_map_json,
+    render_architecture_summary_markdown,
+    render_execution_flow_mermaid,
+    render_module_graph_mermaid,
+    render_subsystem_map_mermaid,
+    render_system_overview_mermaid,
+)
+from dashboard import render_dashboard_html
+from models import RepositoryModel
 from onboarding_analyzer import (  # noqa: E402
     analyze_inventory,
     render_learning_path_markdown,
     render_summary_markdown,
 )
 from repository_scan import scan_repository  # noqa: E402
-from visualizations import (  # noqa: E402
-    render_architecture_overview_mermaid,
-    render_dependency_graph_mermaid,
-    render_module_graph_mermaid,
-)
 
 try:
     from llm_harness_lite import Artifact, ArtifactRegistry, ArtifactType, SkillResult
@@ -86,25 +90,32 @@ except ImportError:  # Fallback so the skill logic stays testable without the ha
             return manifest_path
 
 
-def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") -> SkillResult:
+def run_onboarding(
+    repo_path: str | Path, output_dir: str | Path = "outputs", *, module_graph: str | None = None
+) -> SkillResult:
     """Run the full onboarding skill and return a harness SkillResult."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
     model: RepositoryModel = scan_repository(repo_path)
-    insights = analyze_inventory(model)
-
+    architecture = extract_architecture(model)
+    insights = analyze_inventory(model, architecture)
     summary_md = render_summary_markdown(model, insights)
     learning_md = render_learning_path_markdown(model, insights)
+    architecture_summary_md = render_architecture_summary_markdown(architecture)
     diagrams = {
-        "dependency_graph.mmd": render_dependency_graph_mermaid(model),
-        "module_graph.mmd": render_module_graph_mermaid(model),
-        "architecture_overview.mmd": render_architecture_overview_mermaid(model),
+        "system_overview.mmd": render_system_overview_mermaid(architecture),
+        "execution_flow.mmd": render_execution_flow_mermaid(architecture),
+        "subsystem_map.mmd": render_subsystem_map_mermaid(architecture),
     }
+    if module_graph is not None:
+        diagrams["module_graph.mmd"] = render_module_graph_mermaid(architecture, module_graph)
 
     summary_path = out / "summary.md"
     learning_path_path = out / "learning_path.md"
     repo_map_path = out / "repository_map.json"
+    architecture_summary_path = out / "architecture_summary.md"
+    architecture_map_path = out / "architecture_map.json"
     dashboard_path = out / "dashboard.html"
 
     summary_path.write_text(summary_md, encoding="utf-8")
@@ -113,13 +124,17 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
         json.dumps(model.to_dict(), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    architecture_summary_path.write_text(architecture_summary_md, encoding="utf-8")
+    architecture_map_path.write_text(
+        render_architecture_map_json(architecture), encoding="utf-8"
+    )
     diagram_paths = {}
     for name, content in diagrams.items():
         diagram_path = out / name
         diagram_path.write_text(content, encoding="utf-8")
         diagram_paths[name] = diagram_path
     dashboard_path.write_text(
-        render_dashboard_html(model, insights, summary_md, diagrams),
+        render_dashboard_html(model, insights, architecture_summary_md, diagrams, architecture),
         encoding="utf-8",
     )
 
@@ -136,11 +151,23 @@ def run_onboarding(repo_path: str | Path, output_dir: str | Path = "outputs") ->
         name="repository_map.json", type=ArtifactType.JSON, path=str(repo_map_path),
         description="Structured RepositoryModel for the scanned repository.",
     ))
+    registry.register(Artifact(
+        name="architecture_summary.md",
+        type=ArtifactType.MARKDOWN,
+        path=str(architecture_summary_path),
+        description="Onboarding-focused explanation of the inferred system architecture.",
+    ))
+    registry.register(Artifact(
+        name="architecture_map.json",
+        type=ArtifactType.JSON,
+        path=str(architecture_map_path),
+        description="Machine-readable architecture components and relationships.",
+    ))
     mermaid_type = getattr(ArtifactType, "MERMAID", "mermaid")
     for name, diagram_path in diagram_paths.items():
         registry.register(Artifact(
             name=name, type=mermaid_type, path=str(diagram_path),
-            description=f"Mermaid visualization generated from RepositoryModel: {name}.",
+            description=f"Mermaid visualization generated from ArchitectureModel: {name}.",
         ))
     registry.register(Artifact(
         name="dashboard.html",
@@ -182,11 +209,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("repository", help="Path to the repository to analyze")
     parser.add_argument("-o", "--output-dir", default="outputs",
                         help="Directory for generated artifacts (default: outputs)")
+    parser.add_argument("--module-graph", metavar="PATH",
+                        help="Also generate a module graph for a detected repository-relative area")
     args = parser.parse_args(argv)
 
     try:
-        run_onboarding(args.repository, args.output_dir)
-    except (FileNotFoundError, NotADirectoryError) as exc:
+        run_onboarding(args.repository, args.output_dir, module_graph=args.module_graph)
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
     return 0

@@ -13,9 +13,18 @@ reusable repository facts rather than each implementing a separate scanner.
 
 ## Current MVP
 
-The current scanner is deliberately lightweight and read-only. It uses
-conventions and metadata; it does not parse source code into symbols, resolve
-calls, execute project commands, or produce a dependency graph.
+The scanner and architecture analyzer are deliberately lightweight and
+read-only. The architecture analyzer does not build an AST or resolve calls;
+it uses bounded lexical checks for imports/re-exports, type and class
+references, dependency registrations, documentation, and configuration, then
+combines those signals with framework/layout conventions. Relationships carry
+confidence and file/line evidence, and are not presented as observed call edges.
+Confidence values are heuristic scores, not calibrated probabilities. Import
+edges require a unique match to a model-listed local source file; unresolved
+imports are omitted. Configuration registration discovery currently recognizes
+provider/binding/registration sections in YAML, and other detections are
+best-effort lexical heuristics, not full language or dependency-injection
+resolution.
 
 It currently inventories:
 
@@ -40,6 +49,36 @@ analyzer. Implement the small `Analyzer` interface (`supports` and `analyze`),
 then add the analyzer to `DEFAULT_ANALYZERS`; callers can also pass a custom
 analyzer sequence to `scan_repository`. Analyzers enrich `RepositoryModel`;
 artifact renderers consume that model separately from scanning.
+`architecture_analyzer.py` extracts a framework-aware `ArchitectureModel`
+from repository structure, patterns, public API exports, source references,
+and bounded README, documentation, and configuration evidence, then renders
+architecture artifacts from that intermediate model. It also recognizes feature
+boundaries containing multiple architectural layers and uniquely matched public
+modules. Components accumulate evidence across categories: confidence measures
+support for a component, while significance combines relevance, distinct
+relationships, references from prominent components, and position in the
+selected conceptual flow. The JSON retains the earlier relevance score.
+Significance is shown as High (at least 0.55), Medium (at least 0.20), or Low.
+All scores are heuristics rather than probabilities, and the number of files
+alone does not determine priority. The analyzer groups recognized roles into
+only the architectural layers supported by the detected components.
+Diagrams focus on the analyzed repository's components and inferred
+relationships, not the scanner pipeline or a dependency inventory.
+
+`repository_relevance.py` classifies project, infrastructure, vendor, and
+generated areas using path conventions. The scanner records vendor/generated
+directory boundaries but does not descend into them. Application architecture
+is inferred from the remaining paths; ownership and framework group labels
+are heuristic, not authoritative. Custom module, theme, workspace package,
+and layered business-area paths are retained for exploration.
+
+Composer and npm lockfiles contribute distinct declared or locked package
+names to namespace-level groups. Counts are deduplicated by package name, not
+installation or version, and lockfiles do not prove packages are installed.
+Lockfile entries and individual group members remain available for drill-down;
+vendor manifests are not traversed, so a missing lockfile limits visibility.
+Large dependency lists are summarized rather than displayed as individual
+declarations.
 
 Run the skill from this directory:
 
@@ -47,7 +86,15 @@ Run the skill from this directory:
 pip install -r requirements.txt
 python onboarding_skill.py /path/to/repository
 python onboarding_skill.py /path/to/repository --output-dir ./my-output
+python onboarding_skill.py /path/to/repository --module-graph app/code/Company/Module
 ```
+
+`--module-graph` is optional and accepts a detected repository-relative area
+listed in `architecture_map.json` or the dashboard. It generates
+`module_graph.mmd`; an unknown area is reported as an error. System overview
+and subsystem diagrams use at most 15 nodes, aggregating large models and
+showing an "Other" count when areas do not fit. The full area list is in the
+architecture map and dashboard.
 
 By default, the skill writes these artifacts to `outputs/`:
 
@@ -56,13 +103,37 @@ By default, the skill writes these artifacts to `outputs/`:
 - `learning_path.md` — a suggested sequence for becoming productive
 - `repository_map.json` — the serialized `RepositoryModel`, including
   normalized metadata, dependencies, directories, files, and detected patterns
-- `dependency_graph.mmd` — declared dependency relationships in Mermaid
-- `module_graph.mmd` — directory and file containment in Mermaid
-- `architecture_overview.mmd` — technologies, major areas, entry points, and
-  other recorded architecture facts in Mermaid
-- `dashboard.html` — self-contained onboarding dashboard with embedded
-  Mermaid sources and learning-path content
+- `architecture_summary.md` — system narrative, responsibilities, execution
+  flow, and recommended exploration order
+- `architecture_map.json` — machine-readable components, subsystems, layers,
+  responsibilities, inferred relationships, entry points, external
+  integrations, data stores, and detected patterns; each relationship includes
+  a confidence score and supporting evidence; components also include relevance
+  and significance scores and locations, plus repository relevance and grouped
+  dependency information
+- `system_overview.mmd` — high-level component relationship diagram
+- `execution_flow.mmd` — inferred application execution sequence
+- `subsystem_map.mmd` — components grouped by architectural boundary
+- `dashboard.html` — standalone onboarding dashboard with embedded diagram
+  source, rendered Mermaid diagrams, and learning-path content
 - `manifest.json` — artifacts registered through the harness API
+
+The dashboard loads a pinned Mermaid.js release from jsDelivr to render the
+diagrams. The HTML and Mermaid source are embedded in the artifact; if the CDN
+is unavailable, users can still view or copy the Mermaid source.
+Execution-flow diagrams depict a likely conceptual path through relationships,
+not observed runtime events; imports and references are not proof of calls.
+External services and data stores are inferred from runtime dependencies,
+top-level imports, and recognized runtime configuration, not documentation
+mentions or development/optional dependencies. Profile-gated Compose services
+and disabled YAML sections, as well as example, local, or development
+configuration, are excluded. These signals
+do not prove an integration is active in a deployment, and conservative
+filtering may miss integrations. Architecture evidence is sampled from at most 120
+model-listed files, up to 24 KB per file and 400 KB total. Root README and
+configuration, entry points, selected public APIs, and documentation are
+prioritized; remaining files are interleaved by directory. Sampling and lexical
+matching are incomplete and do not resolve a call graph.
 
 Run the tests with:
 
@@ -111,11 +182,12 @@ is organized internally. Deeper analysis needs at least:
    with source spans. For Python, the standard-library `ast` module is a
    reasonable first adapter. Other languages need their own parser, compiler,
    or language-server integration; file extensions alone are not enough.
-3. **Relationship resolution.** Extract and resolve edges such as `contains`,
-   `imports`, `calls`, `inherits`, `implements`, `registers`, `tests`, and
-   `configures`. Parsing identifies syntax; resolving names, aliases,
-   re-exports, conditional imports, and dependency injection is a separate
-   problem.
+3. **Relationship resolution.** The current analyzer makes a bounded lexical
+   first pass over imports/re-exports, type/class references, registrations,
+   configuration, and explicit documentation statements. Deeper edges such as
+   `calls`, `tests`, and fully resolved dependency injection still require
+   syntax extraction and resolution of aliases, conditional imports, and
+   runtime configuration.
 4. **An explicit confidence model.** An import can often be observed directly;
    a call target may be ambiguous; a runtime plugin target may be unknowable
    statically. Preserve those differences instead of flattening all edges into
