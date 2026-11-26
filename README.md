@@ -64,6 +64,20 @@ alone does not determine priority. The analyzer groups recognized roles into
 only the architectural layers supported by the detected components.
 Diagrams focus on the analyzed repository's components and inferred
 relationships, not the scanner pipeline or a dependency inventory.
+`domain_discovery.py` consumes project-owned module boundaries, repository
+documentation, source paths, and Architecture Discovery's external dependency
+facts to infer business domains, capabilities, and integration boundaries.
+These are convention-based suggestions with supporting evidence, not
+authoritative ownership or business rules. Domain Discovery is separate from
+Architecture Discovery and puts business-focused steps first in the learning
+path.
+`business_insights.py` scores evidence confidence separately from estimated
+business impact and onboarding importance, then ranks modules and plans a
+first week. Human-readable reports show at most ten prioritized modules; the
+domain map retains the complete inventory. Scores are heuristic and do not
+represent measured revenue or calibrated probabilities. Documentation-only
+mentions remain low impact unless supported by a custom module, source path, or
+Architecture Discovery integration evidence.
 
 `repository_relevance.py` classifies project, infrastructure, vendor, and
 generated areas using path conventions. The scanner records vendor/generated
@@ -111,6 +125,21 @@ By default, the skill writes these artifacts to `outputs/`:
   a confidence score and supporting evidence; components also include relevance
   and significance scores and locations, plus repository relevance and grouped
   dependency information
+- `business_domains.md` — inferred business responsibilities, related modules,
+  priorities, and evidence
+- `business_capabilities.md` — capabilities grouped by business workflow and
+  inferred external ownership boundaries
+- `onboarding_priorities.md` — a suggested one-week business-first learning
+  order, including areas to defer initially
+- `domain_map.json` — structured domains, capabilities, integrations, custom
+  modules, priorities, and business-impact assessments
+- `executive_summary.md` — concise repository purpose, value areas, and initial
+  focus
+- `critical_modules.md` — top ten modules with domain ownership, impact, and
+  rationale; the domain map retains remaining modules
+- `first_week_onboarding.md` — a five-day business-focused onboarding plan
+- `business_insights.md` — prioritized value areas, integration boundaries, and
+  maintainer-confirmable recommendations
 - `system_overview.mmd` — high-level component relationship diagram
 - `execution_flow.mmd` — inferred application execution sequence
 - `subsystem_map.mmd` — components grouped by architectural boundary
@@ -254,6 +283,8 @@ repo-onboarding-assistant/
 ├── repository_scan.py       # Local repository scanner
 ├── analyzers.py             # Generic and language-specific model enrichers
 ├── onboarding_analyzer.py  # Onboarding heuristics and Markdown rendering
+├── domain_discovery.py      # Business domains, capabilities, and priorities
+├── business_insights.py    # Impact scoring, module ranking, and onboarding plan
 ├── models.py                # RepositoryModel and normalized records
 ├── templates/               # Reference output templates
 ├── outputs/                 # Default generated artifacts

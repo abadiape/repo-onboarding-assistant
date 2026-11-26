@@ -18,6 +18,14 @@ outputs:
   - summary.md
   - learning_path.md
   - repository_map.json
+  - business_domains.md
+  - business_capabilities.md
+  - onboarding_priorities.md
+  - domain_map.json
+  - executive_summary.md
+  - critical_modules.md
+  - first_week_onboarding.md
+  - business_insights.md
   - manifest.json
 result:
   type: SkillResult
@@ -26,3 +34,9 @@ capabilities:
   - name: repository-scan
     module: repository_scan.py
     description: Convention-based scan and analyzer enrichment for metadata, frameworks, dependencies, files, directories, and patterns
+  - name: domain-discovery
+    module: domain_discovery.py
+    description: Heuristic business domains, capabilities, integrations, and business-first onboarding priorities
+  - name: business-insights
+    module: business_insights.py
+    description: Rank domain impact, critical modules, integrations, and first-week onboarding actions

@@ -28,7 +28,21 @@ from architecture_analyzer import (
     render_subsystem_map_mermaid,
     render_system_overview_mermaid,
 )
+from business_insights import (
+    analyze_business_insights,
+    render_business_insights_markdown,
+    render_critical_modules_markdown,
+    render_executive_summary_markdown,
+    render_first_week_onboarding_markdown,
+)
 from dashboard import render_dashboard_html
+from domain_discovery import (
+    analyze_domains,
+    domain_learning_steps,
+    render_business_capabilities_markdown,
+    render_business_domains_markdown,
+    render_onboarding_priorities_markdown,
+)
 from models import RepositoryModel
 from onboarding_analyzer import (  # noqa: E402
     analyze_inventory,
@@ -99,9 +113,51 @@ def run_onboarding(
 
     model: RepositoryModel = scan_repository(repo_path)
     architecture = extract_architecture(model)
+    domains = analyze_domains(model, architecture)
+    business_insights = analyze_business_insights(architecture, domains)
     insights = analyze_inventory(model, architecture)
+    top_domain_names = [
+        item.name for item in business_insights.domain_impacts
+        if item.onboarding_importance in {"Very High", "High"}
+    ][:5]
+    top_module_names = [
+        item.name for item in business_insights.ranked_modules
+        if item.tier != "Supporting"
+    ][:3]
+    top_capability_names = [
+        item.name for item in business_insights.capabilities
+        if item.priority != "low"
+    ][:5]
+    insights.learning_path = domain_learning_steps(
+        domains,
+        top_domain_names=top_domain_names,
+        top_module_names=top_module_names,
+        top_capability_names=top_capability_names,
+    ) + insights.learning_path
+    for step in insights.learning_path:
+        if step["title"] == "Explore project-owned areas" and top_module_names:
+            step["detail"] = (
+                "Start with " + ", ".join(f"`{name}`" for name in top_module_names)
+                + "; consult `domain_map.json` for the full area inventory."
+            )
+    for index, step in enumerate(insights.learning_path, 1):
+        step["step"] = index
     summary_md = render_summary_markdown(model, insights)
     learning_md = render_learning_path_markdown(model, insights)
+    business_domains_md = render_business_domains_markdown(domains)
+    business_capabilities_md = render_business_capabilities_markdown(domains)
+    onboarding_priorities_md = render_onboarding_priorities_markdown(
+        domains,
+        top_domain_names=top_domain_names,
+        top_module_names=top_module_names,
+        top_capability_names=top_capability_names,
+    )
+    executive_summary_md = render_executive_summary_markdown(
+        architecture, business_insights
+    )
+    critical_modules_md = render_critical_modules_markdown(business_insights)
+    first_week_onboarding_md = render_first_week_onboarding_markdown(business_insights)
+    business_insights_md = render_business_insights_markdown(business_insights)
     architecture_summary_md = render_architecture_summary_markdown(architecture)
     diagrams = {
         "system_overview.mmd": render_system_overview_mermaid(architecture),
@@ -116,6 +172,14 @@ def run_onboarding(
     repo_map_path = out / "repository_map.json"
     architecture_summary_path = out / "architecture_summary.md"
     architecture_map_path = out / "architecture_map.json"
+    business_domains_path = out / "business_domains.md"
+    business_capabilities_path = out / "business_capabilities.md"
+    onboarding_priorities_path = out / "onboarding_priorities.md"
+    executive_summary_path = out / "executive_summary.md"
+    critical_modules_path = out / "critical_modules.md"
+    first_week_onboarding_path = out / "first_week_onboarding.md"
+    business_insights_path = out / "business_insights.md"
+    domain_map_path = out / "domain_map.json"
     dashboard_path = out / "dashboard.html"
 
     summary_path.write_text(summary_md, encoding="utf-8")
@@ -127,6 +191,25 @@ def run_onboarding(
     architecture_summary_path.write_text(architecture_summary_md, encoding="utf-8")
     architecture_map_path.write_text(
         render_architecture_map_json(architecture), encoding="utf-8"
+    )
+    business_domains_path.write_text(business_domains_md, encoding="utf-8")
+    business_capabilities_path.write_text(business_capabilities_md, encoding="utf-8")
+    onboarding_priorities_path.write_text(onboarding_priorities_md, encoding="utf-8")
+    executive_summary_path.write_text(executive_summary_md, encoding="utf-8")
+    critical_modules_path.write_text(critical_modules_md, encoding="utf-8")
+    first_week_onboarding_path.write_text(first_week_onboarding_md, encoding="utf-8")
+    business_insights_path.write_text(business_insights_md, encoding="utf-8")
+    domain_map_path.write_text(
+        json.dumps(
+            {
+                "repository_name": model.repository_name,
+                **domains.to_dict(),
+                "business_insights": business_insights.to_dict(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ) + "\n",
+        encoding="utf-8",
     )
     diagram_paths = {}
     for name, content in diagrams.items():
@@ -163,6 +246,58 @@ def run_onboarding(
         path=str(architecture_map_path),
         description="Machine-readable architecture components and relationships.",
     ))
+    registry.register(Artifact(
+        name="business_domains.md",
+        type=ArtifactType.MARKDOWN,
+        path=str(business_domains_path),
+        description="Business domains, related custom modules, and evidence.",
+    ))
+    registry.register(Artifact(
+        name="business_capabilities.md",
+        type=ArtifactType.MARKDOWN,
+        path=str(business_capabilities_path),
+        description="Business capabilities and inferred external ownership boundaries.",
+    ))
+    registry.register(Artifact(
+        name="onboarding_priorities.md",
+        type=ArtifactType.MARKDOWN,
+        path=str(onboarding_priorities_path),
+        description="Business-focused onboarding priorities and areas to defer initially.",
+    ))
+    registry.register(Artifact(
+        name="domain_map.json",
+        type=ArtifactType.JSON,
+        path=str(domain_map_path),
+        description="Machine-readable domains, capabilities, integrations, and priorities.",
+    ))
+    for name, path, description in (
+        (
+            "executive_summary.md",
+            executive_summary_path,
+            "Concise business-value summary and recommended initial focus.",
+        ),
+        (
+            "critical_modules.md",
+            critical_modules_path,
+            "Top-ranked custom modules with domain ownership, impact, and rationale.",
+        ),
+        (
+            "first_week_onboarding.md",
+            first_week_onboarding_path,
+            "Five-day onboarding plan focused on business domains and critical workflows.",
+        ),
+        (
+            "business_insights.md",
+            business_insights_path,
+            "Evidence-based business impact and onboarding recommendations.",
+        ),
+    ):
+        registry.register(Artifact(
+            name=name,
+            type=ArtifactType.MARKDOWN,
+            path=str(path),
+            description=description,
+        ))
     mermaid_type = getattr(ArtifactType, "MERMAID", "mermaid")
     for name, diagram_path in diagram_paths.items():
         registry.register(Artifact(

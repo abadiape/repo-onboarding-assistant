@@ -52,6 +52,19 @@ heuristics, not probabilities, and conceptual flows are not runtime traces.
    otherwise Low. These are heuristic scores, as are relationship confidences.
    Layers group only recognized component roles. Inferred edges are not
    presented as source-level call edges.
+5. **Domain Discovery** (`domain_discovery.py`) — groups project-owned modules
+   and evidence from documentation, source paths, and inferred external
+   dependencies into business domains, capabilities, and onboarding priorities.
+   The findings are heuristic and complement rather than replace architecture
+   analysis; business-focused steps lead the generated learning path.
+6. **Business Insights** (`business_insights.py`) — separates evidence
+   confidence, estimated business impact, and onboarding importance; ranks
+   critical modules and integrations; and generates a concise executive
+   summary and five-day onboarding plan. Human-readable module lists are capped
+   at ten; the domain map retains the full inventory. Scores are heuristic,
+   not measured revenue or calibrated probabilities. Documentation-only
+   mentions remain low impact without corroborating module, source-path, or
+   Architecture Discovery integration evidence.
 
 Repository relevance classifies application, infrastructure, vendor, and
 generated paths before architecture inference. Vendor and generated trees are
@@ -84,6 +97,17 @@ Output (`outputs/` by default):
   responsibilities, relationships with confidence/evidence, entry points,
   integrations, and data stores; components include confidence, significance,
   relevance, evidence, and locations
+- `business_domains.md` — inferred domains, responsibilities, related modules,
+  priorities, and evidence
+- `business_capabilities.md` — business workflows and inferred external
+  integration ownership boundaries
+- `onboarding_priorities.md` — suggested one-week business-first learning order
+- `domain_map.json` — structured domain, capability, integration, module, and
+  business-impact data
+- `executive_summary.md` — concise business-value summary and recommended focus
+- `critical_modules.md` — top ten modules with domain ownership, impact, and rationale
+- `first_week_onboarding.md` — five-day actionable onboarding plan
+- `business_insights.md` — prioritized business impacts and recommendations
 - `system_overview.mmd` — high-level component relationship diagram
 - `execution_flow.mmd` — inferred application execution sequence
 - `subsystem_map.mmd` — major components grouped by subsystem
@@ -110,6 +134,10 @@ SkillResult(
     summary="Repository onboarding analysis completed",
     artifacts=[...],  # summary.md, learning_path.md, repository_map.json,
                       # architecture_summary.md, architecture_map.json,
+                      # business_domains.md, business_capabilities.md,
+                      # onboarding_priorities.md, domain_map.json,
+                      # executive_summary.md, critical_modules.md,
+                      # first_week_onboarding.md, business_insights.md,
                       # system_overview.mmd, execution_flow.mmd,
                       # subsystem_map.mmd, dashboard.html, manifest.json
 )
@@ -145,6 +173,8 @@ repo-onboarding-assistant/
 ├── repository_scan.py       # Repository Scan Capability (local to skill)
 ├── analyzers.py             # Generic and language-specific model enrichers
 ├── onboarding_analyzer.py   # heuristic insights over the model
+├── domain_discovery.py      # business domains, capabilities, and priorities
+├── business_insights.py     # impact scoring, module ranking, and onboarding plan
 ├── models.py                # RepositoryModel and normalized records
 ├── templates/               # reference Markdown skeletons
 ├── outputs/                 # generated artifacts (default target)
