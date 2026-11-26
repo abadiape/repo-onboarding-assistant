@@ -87,8 +87,11 @@ Architecture Discovery integration evidence. Integration criticality and runtime
 activation must be confirmed with maintainers.
 `analyzers/narrative_generation.py` combines architecture, domain-discovery, and
 business-insight findings into repository-specific stories, workflow guides,
-and onboarding briefs. Module/domain links and inferred flows remain
-onboarding hypotheses, not observed runtime call order or operational risk.
+and onboarding briefs. Narrative summaries prioritize matched custom modules,
+capabilities, and configured integrations; repository descriptions are fallback
+context rather than the primary explanation when direct business evidence exists.
+Module/domain links and inferred flows remain onboarding hypotheses, not observed
+runtime call order or operational risk.
 
 `analyzers/repository_relevance.py` classifies project, infrastructure, vendor, and
 generated areas using path conventions. The scanner records vendor/generated

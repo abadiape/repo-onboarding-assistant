@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from analyzers.business_insights import BusinessInsights, DomainImpact
-from analyzers.domain_discovery import DomainDiscovery
+from analyzers.domain_discovery import BusinessCapability, DomainDiscovery
 from models.architecture_model import ArchitectureModel
 
 
@@ -44,6 +44,7 @@ class NarrativeCustomization:
     name: str
     path: str
     domains: list[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     owner: str | None = None
     explanation: str = ""
 
@@ -57,6 +58,9 @@ class BusinessNarrative:
     primary_domains: list[DomainImpact] = field(default_factory=list)
     domain_interactions: list[DomainInteraction] = field(default_factory=list)
     differentiators: list[str] = field(default_factory=list)
+    customized_domains: list[DomainImpact] = field(default_factory=list)
+    narrative_insights: list[str] = field(default_factory=list)
+    business_flow: str = ""
     notable_patterns: list[str] = field(default_factory=list)
     customizations: list[NarrativeCustomization] = field(default_factory=list)
     workflows: list[NarrativeWorkflow] = field(default_factory=list)
@@ -94,10 +98,7 @@ def generate_business_narrative(
     workflows = [
         NarrativeWorkflow(
             name=capability.name,
-            purpose=(
-                f"Supports {capability.name.lower()} in the workflows inferred for "
-                "this repository."
-            ),
+            purpose=_capability_workflow_purpose(capability),
             domains=list(capability.domains),
             modules=list(capability.modules),
             onboarding_significance=(
@@ -107,8 +108,11 @@ def generate_business_narrative(
         for capability in actionable_capabilities
     ]
 
-    purpose = architecture.description.strip() or (
-        f"{architecture.system_name} is a {architecture.system_type} repository."
+    purpose = _repository_interpretation(
+        architecture, primary_domains, customizations
+    )
+    business_flow = _business_flow(
+        flow_domains, primary_domains, insights
     )
     first_week = _first_week_plan(primary_domains, workflows)
     return BusinessNarrative(
@@ -123,12 +127,198 @@ def generate_business_narrative(
         differentiators=_repository_differentiators(
             domains, primary_domains, insights
         ),
+        customized_domains=sorted(
+            (item for item in primary_domains if item.modules),
+            key=lambda item: (-len(item.modules), item.name.casefold()),
+        )[:5],
+        narrative_insights=_narrative_insights(primary_domains, insights),
+        business_flow=business_flow,
         notable_patterns=architecture.detected_patterns[:5],
         customizations=customizations,
         workflows=workflows,
         critical_integrations=insights.critical_integrations[:5],
         recommendations=insights.recommendations[:5],
         first_week=first_week,
+    )
+
+
+def _capability_workflow_purpose(capability: BusinessCapability) -> str:
+    evidence = []
+    if capability.domains:
+        evidence.append("domains " + ", ".join(capability.domains))
+    if capability.modules:
+        evidence.append(
+            "modules " + ", ".join(f"`{name}`" for name in capability.modules[:4])
+        )
+    if evidence:
+        return (
+            f"The scan associates {capability.name} with "
+            + " and ".join(evidence)
+            + ". Trace these components to understand the repository's implementation."
+        )
+    return (
+        f"The repository identifies {capability.name} as a business capability, "
+        "but did not match it to a specific domain or module."
+    )
+
+
+def _repository_interpretation(
+    architecture: ArchitectureModel,
+    domains: list[DomainImpact],
+    customizations: list[NarrativeCustomization],
+) -> str:
+    areas = [
+        f"{domain.name} ({', '.join(domain.modules[:3])})"
+        for domain in domains
+        if domain.modules
+    ][:4]
+    platform = ", ".join(architecture.frameworks[:2]) or architecture.system_type
+    if areas:
+        module_count = len(customizations)
+        areas_text = "; ".join(areas)
+        return (
+            f"This {platform} implementation appears to concentrate custom business "
+            f"behavior in {areas_text}. The analyzer prioritized {module_count} "
+            "representative customizations for onboarding; trace these modules to "
+            "understand how this repository extends its platform."
+        )
+    if customizations:
+        examples = ", ".join(f"`{item.name}`" for item in customizations[:4])
+        return (
+            f"This {platform} repository contains project-owned customizations, "
+            f"including {examples}, but their business domains were not confidently "
+            "matched by the current findings."
+        )
+    return (
+        f"The available architecture findings describe a {architecture.system_type} "
+        "repository, but do not yet identify repository-specific business behavior. "
+        "Use the repository overview as context and confirm the active workflows "
+        "with a maintainer."
+    )
+
+
+def _business_flow(
+    flow_domains: list[str],
+    primary_domains: list[DomainImpact],
+    insights: BusinessInsights,
+) -> str:
+    if not flow_domains:
+        return (
+            "No cross-domain business flow can be grounded in the current findings; "
+            "ask a maintainer to trace a representative user or operational journey."
+        )
+    domains_by_name = {domain.name: domain for domain in primary_domains}
+    capabilities_by_domain: dict[str, list[str]] = {}
+    modules_by_domain: dict[str, list[str]] = {}
+    for capability in insights.capabilities:
+        for domain in capability.domains:
+            capabilities_by_domain.setdefault(domain, []).append(capability.name)
+            modules_by_domain.setdefault(domain, []).extend(capability.modules)
+
+    phrases = []
+    for name in flow_domains:
+        domain = domains_by_name.get(name)
+        modules = list(dict.fromkeys(
+            (domain.modules if domain else []) + modules_by_domain.get(name, [])
+        ))[:3]
+        module_detail = (
+            " through customizations such as "
+            + ", ".join(f"`{module}`" for module in modules)
+            if modules else ""
+        )
+        phrases.append(_domain_flow_phrase(name, module_detail))
+    return (
+        "The discovered areas suggest that customers may "
+        + "; then ".join(phrases)
+        + ". This is a conceptual narrative assembled from domain and module matches, "
+        "not proof of runtime sequence."
+    )
+
+
+def _domain_flow_phrase(domain: str, module_detail: str) -> str:
+    descriptions = {
+        "Customer Experience": "use account and registration features",
+        "Catalog": "browse product information",
+        "Search": "find products and content",
+        "Orders": "create and manage orders",
+        "Payments": "complete payment",
+        "ERP Integrations": "synchronize business data with ERP systems",
+        "Inventory": "check or update stock availability",
+        "Shipping": "coordinate delivery and fulfillment",
+        "Marketing": "encounter promotions and campaigns",
+        "Loyalty": "use rewards and loyalty features",
+    }
+    activity = descriptions.get(domain, f"interact with {domain.lower()} functionality")
+    return f"{activity}{module_detail}"
+
+
+def _narrative_insights(
+    domains: list[DomainImpact], insights: BusinessInsights
+) -> list[str]:
+    capabilities_by_domain: dict[str, list[str]] = {}
+    for capability in insights.capabilities:
+        for domain in capability.domains:
+            capabilities_by_domain.setdefault(domain, []).append(capability.name)
+
+    observations = []
+    for domain in domains:
+        if not domain.modules and not domain.integrations:
+            continue
+        evidence = []
+        if domain.modules:
+            evidence.append(
+                f"custom modules {', '.join(f'`{name}`' for name in domain.modules[:4])}"
+            )
+        if domain.integrations:
+            evidence.append(
+                f"configured integrations {', '.join(f'`{name}`' for name in domain.integrations[:3])}"
+            )
+        capabilities = capabilities_by_domain.get(domain.name, [])
+        capability_detail = (
+            f" Related discovered capabilities include {', '.join(capabilities[:3])}."
+            if capabilities else ""
+        )
+        starting_point = (
+            f" {domain.starting_module} is the suggested starting module."
+            if domain.starting_module else ""
+        )
+        observations.append(
+            f"{domain.name} has repository-specific evidence: "
+            + " and ".join(evidence)
+            + f". It is rated {domain.business_impact} impact by the onboarding "
+            f"heuristic.{capability_detail}{starting_point}"
+        )
+    return observations[:6]
+
+
+def _domain_learning_advice(domain: DomainImpact) -> str:
+    subjects = {
+        "Payments": "how payment behavior is implemented",
+        "Orders": "how orders are created and managed",
+        "ERP Integrations": "how business data is synchronized with ERP systems",
+        "Inventory": "how stock availability is managed",
+        "Shipping": "how delivery and fulfillment are coordinated",
+        "Customer Experience": "how customer registration and accounts work",
+        "Catalog": "how product information is customized",
+        "Search": "how customers find products and content",
+        "Marketing": "how promotions and campaigns are implemented",
+        "Loyalty": "how customer rewards are managed",
+    }
+    modules = list(dict.fromkeys(
+        ([domain.starting_module] if domain.starting_module else [])
+        + domain.learning_order
+        + domain.modules
+    ))[:2]
+    subject = subjects.get(domain.name, domain.name.lower())
+    if not modules:
+        return (
+            f"To understand {subject}, ask a maintainer for the relevant code entry "
+            "point; no starting module was matched."
+        )
+    module_text = " and ".join(f"`{name}`" for name in modules)
+    return (
+        f"If you want to understand {subject}, start with {module_text}. "
+        f"The scan associates these modules with {domain.name}."
     )
 
 
@@ -144,11 +334,18 @@ def _prioritized_customizations(
     for item in ranked[:5]:
         discovered = discovered_modules.get(item.name)
         domains = item.domains
+        capabilities = [
+            capability.name for capability in insights.capabilities
+            if item.name in capability.modules
+        ][:3]
         if domains:
+            associations = [", ".join(domains)]
+            if capabilities:
+                associations.append(", ".join(capabilities))
             explanation = (
-                f"The findings associate this module with {', '.join(domains)} and "
-                "rank it for onboarding. Trace its behavior before changing related "
-                "workflows; confirm its role with a maintainer."
+                f"Discovery matches this module to {', '.join(associations)}. "
+                "It is an evidence-backed starting point for these workflows; "
+                "confirm its runtime role with a maintainer."
             )
         else:
             explanation = (
@@ -160,6 +357,7 @@ def _prioritized_customizations(
             name=item.name,
             path=item.path,
             domains=domains,
+            capabilities=capabilities,
             owner=discovered.owner if discovered else None,
             explanation=explanation,
         ))
@@ -437,7 +635,20 @@ def render_repository_story_markdown(narrative: BusinessNarrative) -> str:
             "Detected architecture patterns: "
             + ", ".join(narrative.notable_patterns) + ".",
         ]
+    lines += ["", "## What Appears Most Customized", ""]
+    if narrative.customized_domains:
+        for domain in narrative.customized_domains:
+            modules = ", ".join(f"`{name}`" for name in domain.modules[:6])
+            lines.append(
+                f"- **{domain.name}** has {len(domain.modules)} matched project modules: "
+                f"{modules}. These matches suggest where to "
+                "start reading; they do not measure code volume or runtime traffic."
+            )
+    else:
+        lines.append("No domain had enough direct module evidence to compare customization.")
     lines += ["", "## How Value Moves Through The System", ""]
+    if narrative.business_flow:
+        lines += [narrative.business_flow, ""]
     if narrative.core_flow_domains:
         domains_by_name = {domain.name: domain for domain in narrative.primary_domains}
         flow_steps = []
@@ -492,17 +703,34 @@ def render_repository_story_markdown(narrative: BusinessNarrative) -> str:
             )
     else:
         lines.append("No directly supported business areas were identified.")
+    lines += ["", "## What Appears Business Critical", ""]
+    critical_domains = [
+        domain for domain in narrative.primary_domains
+        if domain.business_impact in {"Critical", "High"}
+    ]
+    if critical_domains:
+        for domain in critical_domains:
+            modules = ", ".join(f"`{name}`" for name in domain.modules[:4])
+            lines.append(
+                f"- **{domain.name}** is rated {domain.business_impact} by the "
+                "onboarding heuristic"
+                + (f" and is associated with {modules}." if modules else ".")
+                + f" {domain.rationale}"
+            )
+    else:
+        lines.append("No directly supported Critical or High business area was identified.")
+    lines += ["", "## Repository-Specific Insights", ""]
+    if narrative.narrative_insights:
+        lines.extend(f"- {item}" for item in narrative.narrative_insights)
+    else:
+        lines.append("No repository-specific domain observations were supported by direct evidence.")
     lines += ["", "## Most Important Customizations", ""]
     if narrative.customizations:
         for module in narrative.customizations:
             ownership = f" Owner namespace: `{module.owner}`." if module.owner else ""
-            domains = (
-                f" Associated domains: {', '.join(module.domains)}."
-                if module.domains else ""
-            )
             lines.append(
                 f"- **`{module.name}`** (`{module.path}`): {module.explanation}"
-                f"{domains}{ownership}"
+                f"{ownership}"
             )
     else:
         lines.append("No project-owned custom modules were ranked for onboarding.")
@@ -580,20 +808,24 @@ def render_first_day_briefing_markdown(narrative: BusinessNarrative) -> str:
             "- Detected architecture patterns: "
             + ", ".join(narrative.notable_patterns[:3]) + "."
         )
-    lines += ["", "## 3. Important Business Areas", ""]
+    lines += ["", "## 3. Important Business Areas and Workflows", ""]
     if narrative.primary_domains:
-        for domain in narrative.primary_domains[:3]:
-            modules = ", ".join(f"`{name}`" for name in domain.modules[:3])
+        for domain in narrative.primary_domains[:5]:
+            matched_module_count = len(domain.modules)
+            module_match_text = (
+                "1 matched custom module"
+                if matched_module_count == 1
+                else f"{matched_module_count} matched custom modules"
+            )
             lines.append(
-                f"- **{domain.name}** ({domain.business_impact} impact): "
-                f"{domain.description}"
-                + (f" Key modules: {modules}." if modules else "")
+                f"- **{domain.name}** — {domain.business_impact} business impact; "
+                f"{module_match_text}."
             )
     else:
         lines.append("No business area has direct supporting evidence yet.")
     lines += ["", "## 4. Important Customizations", ""]
     if narrative.customizations:
-        for module in narrative.customizations[:3]:
+        for module in narrative.customizations[:5]:
             lines.append(
                 f"- **`{module.name}`** — {', '.join(module.domains) or 'business role unassigned'} "
                 f"(`{module.path}`)."
@@ -601,10 +833,16 @@ def render_first_day_briefing_markdown(narrative: BusinessNarrative) -> str:
     else:
         lines.append("No project-owned customization was ranked.")
     lines += ["", "## 5. Recommended Learning Sequence", ""]
-    lines.extend(
-        f"{index}. {title.split(': ', 1)[-1]} — {advice}"
-        for index, (title, advice) in enumerate(narrative.first_week[:3], start=1)
-    )
+    if narrative.primary_domains:
+        lines.extend(
+            f"{index}. {_domain_learning_advice(domain)}"
+            for index, domain in enumerate(narrative.primary_domains[:4], start=1)
+        )
+    else:
+        lines.extend(
+            f"{index}. {title.split(': ', 1)[-1]} — {advice}"
+            for index, (title, advice) in enumerate(narrative.first_week[:3], start=1)
+        )
     lines += [
         "",
         "Validate inferred roles and priorities with a maintainer before changing "
