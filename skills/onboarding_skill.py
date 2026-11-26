@@ -46,6 +46,7 @@ from analyzers.narrative_generation import (
     render_repository_story_markdown,
 )
 from artifacts.dashboard import render_dashboard_html
+from artifacts.knowledge_hub import build_knowledge_hub, render_knowledge_hub_html
 from analyzers.domain_discovery import (
     analyze_domains,
     domain_learning_steps,
@@ -204,6 +205,8 @@ def run_onboarding(
     first_day_briefing_path = out / "first_day_briefing.md"
     domain_map_path = out / "domain_map.json"
     dashboard_path = out / "dashboard.html"
+    knowledge_hub_path = out / "knowledge_hub.json"
+    knowledge_hub_html_path = out / "knowledge_hub.html"
 
     summary_path.write_text(summary_md, encoding="utf-8")
     learning_path_path.write_text(learning_md, encoding="utf-8")
@@ -249,6 +252,21 @@ def run_onboarding(
         render_dashboard_html(model, insights, architecture_summary_md, diagrams, architecture),
         encoding="utf-8",
     )
+    artifact_names = [
+        "summary.md", "learning_path.md", "repository_map.json",
+        "architecture_summary.md", "architecture_map.json", "business_domains.md",
+        "business_capabilities.md", "onboarding_priorities.md", "domain_map.json",
+        "executive_summary.md", "critical_modules.md", "first_week_onboarding.md",
+        "business_insights.md", "business_story.md", "critical_workflows.md",
+        "first_week_story.md", "repository_story.md", "business_risk_story.md",
+        "first_day_briefing.md", *diagrams, "dashboard.html", "knowledge_hub.json",
+        "manifest.json",
+    ]
+    hub = build_knowledge_hub(model, architecture, domains, business_insights, narrative, artifact_names)
+    knowledge_hub_path.write_text(
+        json.dumps(hub, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    knowledge_hub_html_path.write_text(render_knowledge_hub_html(hub), encoding="utf-8")
 
     registry = ArtifactRegistry()
     registry.register(Artifact(
@@ -369,6 +387,15 @@ def run_onboarding(
         path=str(dashboard_path),
         description="Standalone onboarding dashboard with embedded model artifacts.",
     ))
+    registry.register(Artifact(
+        name="knowledge_hub.json", type=ArtifactType.JSON, path=str(knowledge_hub_path),
+        description="Aggregated structured onboarding knowledge.",
+    ))
+    registry.register(Artifact(
+        name="knowledge_hub.html", type=getattr(ArtifactType, "HTML", "html"),
+        path=str(knowledge_hub_html_path),
+        description="Portable Knowledge Hub for repository onboarding.",
+    ))
 
     # Register the manifest after the first export, then re-export so it
     # lists itself along with the generated artifacts.
@@ -388,6 +415,7 @@ def run_onboarding(
     print(f"Repository: {model.repository_name}")
     print(f"Languages: {', '.join(model.languages) or 'none detected'}")
     print(f"Frameworks: {', '.join(model.frameworks) or 'none detected'}")
+    print(f"Start with: {knowledge_hub_html_path.resolve()}")
     print(f"Artifacts written to {out.resolve()}:")
     for artifact in result.artifacts:
         print(f"  - {artifact.name} ({artifact.path})")

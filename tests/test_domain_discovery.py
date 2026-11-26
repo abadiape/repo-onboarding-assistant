@@ -75,6 +75,19 @@ def test_domain_discovery_outputs_and_business_first_learning_path(tmp_path):
         item["name"] for item in domain_map["capabilities"]
     }
     business_insights = domain_map["business_insights"]
+    hub = json.loads((out / "knowledge_hub.json").read_text(encoding="utf-8"))
+    html = (out / "knowledge_hub.html").read_text(encoding="utf-8")
+    payment = next(item for item in hub["business_domains"] if item["name"] == "Payments")
+    assert payment["starting_module"] == "ABCVisa"
+    assert payment["business_impact"] == "Critical"
+    assert hub["critical_modules"][0]["name"] == "ABCVisa"
+    assert {"vendor", "generated"} <= set(hub["overview"]["defer"])
+    assert "ABCVisa" in html and "Defer initially" in html
+    assert len(hub["learning_path"]) == 5
+    assert all(day["title"] in html for day in hub["learning_path"])
+    assert all(f'## Day {index}: {day["title"]}' in (out / "first_week_onboarding.md").read_text(encoding="utf-8")
+               for index, day in enumerate(hub["learning_path"], 1))
+    assert set(hub["artifacts"]) == {artifact.name for artifact in result.artifacts} - {"knowledge_hub.html"}
     payment_score = next(
         item for item in business_insights["domain_impacts"]
         if item["name"] == "Payments"

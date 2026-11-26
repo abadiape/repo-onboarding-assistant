@@ -121,6 +121,16 @@ The entry point can also be run as `python -m skills.onboarding_skill` from
 the repository root. Skill metadata is in `skills/skill.yaml`; its entry point
 and capability paths are relative to that file.
 
+Open `knowledge_hub.html` in the output directory to start onboarding. It is
+generated from `knowledge_hub.json`, embeds its content, and works from a local
+file without a server or network connection. The hub presents business and
+architecture findings, ranked modules, a five-day plan, and an artifact
+explorer. Its SVG visualizations support zoom, drag-to-pan, fullscreen, and
+export; they summarize inferred architecture relationships, conceptual flow,
+and workflow/domain associations rather than executing Mermaid or showing
+runtime traces. Inferred priorities and business impacts should be confirmed
+with maintainers.
+
 `--module-graph` is optional and accepts a detected repository-relative area
 listed in `architecture_map.json` or the dashboard. It generates
 `module_graph.mmd`; an unknown area is reported as an error. System overview
@@ -173,6 +183,8 @@ By default, the skill writes these artifacts to `outputs/`:
 - `system_overview.mmd` — high-level component relationship diagram
 - `execution_flow.mmd` — inferred application execution sequence
 - `subsystem_map.mmd` — components grouped by architectural boundary
+- `knowledge_hub.json` — structured aggregate used to generate the hub
+- `knowledge_hub.html` — primary, offline onboarding experience
 - `dashboard.html` — standalone onboarding dashboard with embedded diagram
   source, rendered Mermaid diagrams, and learning-path content
 - `manifest.json` — artifacts registered through the harness API
