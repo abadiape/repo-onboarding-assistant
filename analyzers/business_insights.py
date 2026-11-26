@@ -480,7 +480,7 @@ def render_critical_modules_markdown(insights: BusinessInsights) -> str:
     return "\n".join(lines)
 
 
-def render_first_week_onboarding_markdown(insights: BusinessInsights) -> str:
+def first_week_onboarding_plan(insights: BusinessInsights) -> list[dict[str, str]]:
     actionable_domains = [
         item for item in insights.domain_impacts
         if item.onboarding_importance in {"Very High", "High"}
@@ -492,7 +492,7 @@ def render_first_week_onboarding_markdown(insights: BusinessInsights) -> str:
             "title": "Product context and architecture",
             "detail": (
                 f"Understand {framework} architecture and its module or component boundaries. "
-                "Read the executive summary and confirm the primary users and workflows with a maintainer."
+                "Review the repository purpose and confirm the primary users and workflows with a maintainer."
             ),
         },
     ]
@@ -524,6 +524,11 @@ def render_first_week_onboarding_markdown(insights: BusinessInsights) -> str:
             break
         days.append({"title": title, "detail": detail})
     days[-1]["detail"] += " Run the project's documented tests before making a change."
+    return days
+
+
+def render_first_week_onboarding_markdown(insights: BusinessInsights) -> str:
+    days = first_week_onboarding_plan(insights)
     lines = [
         "# First-Week Onboarding",
         "",

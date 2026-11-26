@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title — Knowledge Hub</title>
+<style>
+  :root { color-scheme: light; --ink:#142d42; --muted:#526a7c; --accent:#145d82; --line:#d7e4ea; --paper:#fff; }
+  * { box-sizing:border-box; }
+  body { margin:0; color:var(--ink); background:#f2f7f8; font:15px/1.45 system-ui,sans-serif; }
+  header { background:#143d52; color:white; padding:.65rem max(1.25rem,calc((100% - 1200px)/2)); }
+  header h1 { font-size:1.5rem; margin:0; } header p { margin:.1rem 0 0; color:#d5e7ee; }
+  nav { display:flex; gap:.3rem; overflow-x:auto; background:white; border-bottom:1px solid var(--line); padding:.35rem max(1.25rem,calc((100% - 1200px)/2)); }
+  nav a { white-space:nowrap; padding:.45rem .7rem; border-radius:.4rem; color:var(--accent); text-decoration:none; font-weight:650; }
+  nav a:hover, nav a[aria-current="page"] { background:#dff0f4; }
+  main { max-width:1200px; margin:auto; padding:.7rem 1.25rem 3rem; }
+  section[hidden] { display:none; }
+  h2 { margin:.2rem 0 .7rem; font-size:1.35rem; } h3 { margin:.1rem 0 .5rem; font-size:1rem; }
+  p { margin:.35rem 0 .65rem; } ul,ol { margin:.4rem 0; padding-left:1.3rem; }
+  .notice,.empty { color:var(--muted); } .notice { font-size:.9rem; margin:.2rem 0 .8rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:.8rem; }
+  .card { background:var(--paper); border:1px solid var(--line); border-radius:.7rem; padding:1rem; min-width:0; overflow-wrap:anywhere; }
+  #overview { line-height:1.35; } #overview .card { padding:.7rem; }
+  .overview-purpose { font-size:1.05rem; } .overview-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .overview-grid ul { padding-left:1.1rem; }
+  .defer { margin-top:.4rem; } .defer details { font-size:.9rem; }
+  .stack { display:grid; gap:.8rem; } .block { margin:1.2rem 0; }
+  details summary { cursor:pointer; font-weight:700; color:var(--accent); }
+  details summary span { color:var(--muted); font-size:.85rem; font-weight:400; }
+  .day span { color:var(--accent); font-weight:750; font-size:.85rem; text-transform:uppercase; }
+  button { font:inherit; border:1px solid #aac3d0; background:white; color:var(--accent); border-radius:.35rem; padding:.35rem .65rem; cursor:pointer; }
+  button:hover, button:focus-visible, a:focus-visible { outline:2px solid #237ba3; outline-offset:2px; }
+  .diagram-controls { display:flex; flex-wrap:wrap; gap:.4rem; }
+  .diagram-status { font-size:.85rem; color:var(--muted); }
+  .diagram-viewport { background:#f8fbfd; border:1px solid var(--line); border-radius:.4rem; height:400px; overflow:auto; cursor:grab; touch-action:pan-x pan-y; }
+  .diagram-viewport svg { display:block; max-width:none; transform-origin:top left; }
+  .diagram-card:fullscreen { overflow:auto; background:white; padding:1.5rem; }
+  .diagram-card:fullscreen .diagram-viewport { height:calc(100vh - 180px); }
+  @media(max-width:850px) { .overview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(max-width:500px) { .overview-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header><h1>$title</h1><p>Knowledge Hub · Repository onboarding</p></header>
+<nav aria-label="Knowledge Hub views">
+  <a href="#overview">Overview</a><a href="#business">Business</a><a href="#architecture">Architecture</a>
+  <a href="#modules">Critical Modules</a><a href="#week">First Week</a>
+  <a href="#visualizations">Visualizations</a><a href="#artifacts">Artifact Explorer</a>
+</nav>
+<main>
+  <section id="overview">
+    <h2>Executive Overview</h2>
+    <p class="notice">Inferred from repository evidence, not a runtime or business assessment. Confirm priorities and ownership with maintainers.</p>
+    <div class="card overview-purpose"><h3>Repository purpose</h3><p>$purpose</p></div>
+    <div class="grid overview-grid block">
+      <article class="card"><h3>Business focus</h3>$focus</article>
+      <article class="card"><h3>Critical modules</h3>$top_modules</article>
+      <article class="card"><h3>Start here</h3>$starts</article>
+      <article class="card"><h3>Learning path</h3><p><strong>First day:</strong> $first_day</p><p><strong>First week:</strong> $first_week and the remaining plan.</p><a href="#week">See the five-day plan</a></article>
+    </div>
+    <div class="card defer"><h3>Defer initially</h3><p>$defer</p><details><summary>Detected lower-priority paths</summary>$deferred_paths</details></div>
+  </section>
+  <section id="business">
+    <h2>Business View</h2><p class="notice">Domain matches and impacts are heuristic; confirm them with maintainers.</p>
+    <div class="grid">$domains</div>
+    <div class="block"><h2>Workflows</h2><div class="grid">$workflows</div></div>
+  </section>
+  <section id="architecture">
+    <h2>Architecture View</h2><div class="card"><h3>Architecture overview</h3><p>$architecture_description</p><p><strong>Technologies:</strong> $technologies</p></div>
+    <div class="block"><h2>Execution Flow</h2><p class="notice">A conceptual path based on inferred relationships, not a runtime trace.</p>$flow</div>
+    <div class="block"><h2>Architectural Layers</h2><div class="grid">$layers</div></div>
+    <div class="block"><h2>Major Components</h2><div class="grid">$components</div></div>
+  </section>
+  <section id="modules">
+    <h2>Critical Modules</h2><p class="notice">Select a module for its inferred role and onboarding recommendation. Up to ten are shown.</p>
+    <div class="stack">$modules</div>
+  </section>
+  <section id="week"><h2>First Week Onboarding</h2><p class="notice">Use this plan as a starting point and validate it with your team.</p><div class="grid">$week</div></section>
+  <section id="visualizations"><h2>Visualizations</h2><p class="notice">Offline SVG maps generated from structured findings. Associations are inferred.</p><div class="stack">$diagrams</div></section>
+  <section id="artifacts"><h2>Artifact Explorer</h2><p>Open the individual generated artifacts for additional detail.</p><div class="card"><ul>$artifacts</ul></div></section>
+</main>
+<script>
+  const sections = [...document.querySelectorAll("main > section")];
+  const navLinks = [...document.querySelectorAll("nav a")];
+  function showView() {
+    const requested = location.hash.slice(1);
+    const selected = sections.some(section => section.id === requested) ? requested : "overview";
+    sections.forEach(section => { section.hidden = section.id !== selected; });
+    navLinks.forEach(link => {
+      if (link.hash === "#" + selected) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+  }
+  window.addEventListener("hashchange", showView);
+  showView();
+  document.querySelectorAll(".diagram-card").forEach(card => {
+    const viewport = card.querySelector(".diagram-viewport");
+    const svg = viewport.querySelector("svg");
+    const status = card.querySelector(".diagram-status");
+    const originalWidth = Number(svg.getAttribute("width"));
+    const originalHeight = Number(svg.getAttribute("height"));
+    let scale = 1;
+    let drag = null;
+    card.querySelectorAll("button").forEach(button => button.addEventListener("click", async () => {
+      const action = button.dataset.action;
+      if (action === "in") scale = Math.min(4, scale * 1.25);
+      if (action === "out") scale = Math.max(.25, scale / 1.25);
+      if (action === "reset") { scale = 1; viewport.scrollTo(0, 0); }
+      if (["in", "out", "reset"].includes(action)) {
+        svg.setAttribute("width", originalWidth * scale);
+        svg.setAttribute("height", originalHeight * scale);
+        status.textContent = "Zoom: " + Math.round(scale * 100) + "%. Drag to pan.";
+      }
+      if (action === "fullscreen") {
+        try {
+          if (document.fullscreenElement === card) await document.exitFullscreen();
+          else await card.requestFullscreen();
+        } catch (error) { status.textContent = "Fullscreen unavailable: " + error.message; }
+      }
+      if (action === "export") {
+        const copy = svg.cloneNode(true);
+        copy.setAttribute("width", originalWidth);
+        copy.setAttribute("height", originalHeight);
+        const blob = new Blob([new XMLSerializer().serializeToString(copy)], {type:"image/svg+xml"});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url; link.download = "knowledge-hub-diagram.svg"; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        status.textContent = "SVG export started.";
+      }
+    }));
+    viewport.addEventListener("pointerdown", event => {
+      if (event.button !== 0 || event.pointerType !== "mouse") return;
+      drag = {x:event.clientX, y:event.clientY, left:viewport.scrollLeft, top:viewport.scrollTop};
+      viewport.setPointerCapture(event.pointerId);
+      viewport.style.cursor = "grabbing";
+    });
+    viewport.addEventListener("pointermove", event => {
+      if (!drag) return;
+      viewport.scrollLeft = drag.left - (event.clientX - drag.x);
+      viewport.scrollTop = drag.top - (event.clientY - drag.y);
+    });
+    function stopDrag() { drag = null; viewport.style.cursor = "grab"; }
+    viewport.addEventListener("pointerup", stopDrag);
+    viewport.addEventListener("pointercancel", stopDrag);
+  });
+</script>
+</body>
+</html>

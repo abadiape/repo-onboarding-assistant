@@ -87,6 +87,8 @@ def test_run_onboarding_end_to_end(tmp_path):
         "execution_flow.mmd",
         "subsystem_map.mmd",
         "dashboard.html",
+        "knowledge_hub.json",
+        "knowledge_hub.html",
         "manifest.json",
     )
     assert len(result.artifacts) == len(expected_artifacts)
@@ -164,6 +166,12 @@ def test_run_onboarding_end_to_end(tmp_path):
         if artifact["name"] == "dashboard.html"
     )
     assert dashboard_artifact["type"] == "html"
+    hub = json.loads((out / "knowledge_hub.json").read_text(encoding="utf-8"))
+    assert hub["overview"]["repository_name"] == "sample"
+    assert len(hub["learning_path"]) == 5
+    domain_map = json.loads((out / "domain_map.json").read_text(encoding="utf-8"))
+    assert hub["business_domains"] == domain_map["business_insights"]["domain_impacts"]
+    assert (out / "knowledge_hub.html").read_text(encoding="utf-8").count('class="card day"') == 5
 
 
 def test_onboarding_writes_discovered_relationships_to_artifacts(tmp_path):

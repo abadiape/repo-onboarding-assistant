@@ -90,6 +90,12 @@ The optional `--module-graph` argument must match an area in the architecture
 map and produces `module_graph.mmd`. Overview and subsystem diagrams are capped
 at 15 nodes; the architecture map and dashboard retain the full area list.
 
+Start with `knowledge_hub.html`. It is generated from `knowledge_hub.json`
+and opens offline without a server. It includes business and architecture
+views, module priorities, a five-day plan, artifact links, and interactive SVG
+maps of inferred relationships and workflow associations. These maps are not
+runtime traces; confirm findings and priorities with maintainers.
+
 Output (`outputs/` by default):
 
 - `summary.md` — repository overview in Markdown
@@ -114,6 +120,8 @@ Output (`outputs/` by default):
 - `system_overview.mmd` — high-level component relationship diagram
 - `execution_flow.mmd` — inferred application execution sequence
 - `subsystem_map.mmd` — major components grouped by subsystem
+- `knowledge_hub.json` — structured aggregate for the Knowledge Hub
+- `knowledge_hub.html` — primary, offline onboarding experience
 - `dashboard.html` — standalone onboarding dashboard with rendered Mermaid
   diagrams and source/copy controls
 - `manifest.json` — generated automatically through `ArtifactRegistry`
@@ -142,7 +150,8 @@ SkillResult(
                       # executive_summary.md, critical_modules.md,
                       # first_week_onboarding.md, business_insights.md,
                       # system_overview.mmd, execution_flow.mmd,
-                      # subsystem_map.mmd, dashboard.html, manifest.json
+                      # subsystem_map.mmd, dashboard.html, knowledge_hub.json,
+                      # knowledge_hub.html, manifest.json
 )
 ```
 
