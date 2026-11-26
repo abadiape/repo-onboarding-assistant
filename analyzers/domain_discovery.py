@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from models.architecture_model import ArchitectureModel
 from models.models import RepositoryModel
@@ -13,6 +14,9 @@ from analyzers.repository_relevance import (
     classify_path,
     relevant_model,
 )
+
+if TYPE_CHECKING:
+    from analyzers.business_insights import BusinessInsights
 
 
 _DOMAIN_RULES = {
@@ -405,21 +409,59 @@ def domain_learning_steps(
     return steps
 
 
-def render_business_domains_markdown(discovery: DomainDiscovery) -> str:
+def render_business_domains_markdown(
+    discovery: DomainDiscovery, *, insights: BusinessInsights | None = None
+) -> str:
     lines = ["# Business Domains", ""]
     if not discovery.domains:
         lines += ["No business domains were confidently inferred from the available repository evidence.", ""]
-    for domain in discovery.domains:
+    impacts = {item.name: item for item in insights.domain_impacts} if insights else {}
+    domains_by_name = {item.name: item for item in discovery.domains}
+    ordered_domains = (
+        [domains_by_name[item.name] for item in insights.domain_impacts]
+        if insights else discovery.domains
+    )
+    for domain in ordered_domains:
+        impact = impacts.get(domain.name)
         lines += [
             f"## {domain.name} — {domain.priority.title()} priority",
             "",
-            domain.responsibilities[0],
+            "**Description:** " + (" ".join(domain.responsibilities) or "No responsibility was inferred."),
             "",
-            "**Related modules:** "
-            + (", ".join(f"`{name}`" for name in domain.modules[:5]) or "None detected")
-            + (f" (+{len(domain.modules) - 5} more in `domain_map.json`)" if len(domain.modules) > 5 else ""),
+        ]
+        if impact:
+            order = impact.learning_order[:5]
+            lines += [
+                f"**Why it matters:** {impact.rationale}",
+                "",
+                f"**Business impact:** {impact.business_impact}; "
+                f"**evidence confidence:** {impact.confidence:.0%} (heuristic).",
+                "",
+                "**Suggested starting module:** "
+                + (f"`{impact.starting_module}`" if impact.starting_module else "None identified"),
+                "",
+                f"**Learning recommendation:** {impact.learning_recommendation}",
+                "",
+                "**Suggested learning order:** "
+                + (", ".join(f"`{name}`" for name in order) or "Confirm a starting point with a maintainer")
+                + (f" (+{len(impact.learning_order) - 5} more in `domain_map.json`)"
+                   if len(impact.learning_order) > 5 else ""),
+                "",
+            ]
+        else:
+            lines += [
+                "**Related modules:** "
+                + (", ".join(f"`{name}`" for name in domain.modules[:5]) or "None detected"),
+                "",
+            ]
+        lines += [
+            "<details>",
+            "<summary>Supporting evidence</summary>",
             "",
-            "**Evidence:** " + (", ".join(f"`{item}`" for item in domain.evidence) or "None recorded"),
+            *[f"- `{item}`" for item in domain.evidence],
+            *([] if domain.evidence else ["No evidence recorded."]),
+            "",
+            "</details>",
             "",
         ]
     if discovery.custom_modules:
@@ -455,7 +497,15 @@ def render_business_capabilities_markdown(discovery: DomainDiscovery) -> str:
             suffix = f" (+{remaining} more in `domain_map.json`)" if remaining else ""
             lines.append(f"  - Modules: {', '.join(f'`{name}`' for name in modules)}{suffix}")
         if capability.evidence:
-            lines.append(f"  - Evidence: {', '.join(f'`{path}`' for path in capability.evidence)}")
+            lines += [
+                "",
+                "  <details>",
+                "  <summary>Supporting evidence</summary>",
+                "",
+                *[f"  - `{path}`" for path in capability.evidence],
+                "",
+                "  </details>",
+            ]
     if discovery.integrations:
         lines += ["", "## External integrations and ownership boundaries", ""]
         for integration in discovery.integrations[:5]:
