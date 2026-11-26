@@ -14,9 +14,9 @@ import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from pathlib import Path
 
-from analyzers import DEFAULT_ANALYZERS, Analyzer, enrich_repository_model
-from models import Dependency, RepositoryFile, RepositoryModel
-from repository_relevance import classify_path
+from analyzers.analyzers import DEFAULT_ANALYZERS, Analyzer, enrich_repository_model
+from models.models import Dependency, RepositoryFile, RepositoryModel
+from analyzers.repository_relevance import classify_path
 
 # Directories never treated as source structure or recursed into
 # when counting extensions.

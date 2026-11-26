@@ -32,11 +32,11 @@ result:
   summary: Repository onboarding analysis completed
 capabilities:
   - name: repository-scan
-    module: repository_scan.py
+    module: ../analyzers/repository_scan.py
     description: Convention-based scan and analyzer enrichment for metadata, frameworks, dependencies, files, directories, and patterns
   - name: domain-discovery
-    module: domain_discovery.py
+    module: ../analyzers/domain_discovery.py
     description: Heuristic business domains, capabilities, integrations, and business-first onboarding priorities
   - name: business-insights
-    module: business_insights.py
+    module: ../analyzers/business_insights.py
     description: Rank domain impact, critical modules, integrations, and first-week onboarding actions

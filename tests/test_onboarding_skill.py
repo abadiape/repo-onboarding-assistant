@@ -1,6 +1,7 @@
 """End-to-end test: run_onboarding produces artifacts + valid SkillResult."""
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -8,7 +9,43 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from onboarding_skill import run_onboarding
+from skills.onboarding_skill import run_onboarding
+
+
+@pytest.mark.parametrize("module", [False, True])
+def test_cli_entrypoint_after_reorganization(tmp_path, module):
+    root = Path(__file__).resolve().parent.parent
+    repo = tmp_path / "sample"
+    repo.mkdir()
+    (repo / "README.md").write_text("# Sample\n", encoding="utf-8")
+    out = tmp_path / "generated"
+    entrypoint = ["-m", "skills.onboarding_skill"] if module else [
+        str(root / "skills" / "onboarding_skill.py")
+    ]
+
+    completed = subprocess.run(
+        [sys.executable, *entrypoint, str(repo), "--output-dir", str(out)],
+        cwd=root if module else tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "Repository: sample" in completed.stdout
+    assert (out / "manifest.json").is_file()
+    assert json.loads((out / "repository_map.json").read_text())["repository_name"] == "sample"
+
+
+def test_skill_entrypoint_loads_by_file_path(tmp_path):
+    entrypoint = Path(__file__).resolve().parent.parent / "skills" / "onboarding_skill.py"
+    code = (
+        "import importlib.util, sys; "
+        "spec = importlib.util.spec_from_file_location('onboarding_skill', sys.argv[1]); "
+        "module = importlib.util.module_from_spec(spec); "
+        "spec.loader.exec_module(module); "
+        "assert callable(module.run_onboarding)"
+    )
+    subprocess.run([sys.executable, "-c", code, str(entrypoint)], cwd=tmp_path, check=True)
 
 
 def test_run_onboarding_end_to_end(tmp_path):

@@ -5,9 +5,9 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from architecture_model import ArchitectureModel
-from models import RepositoryModel
-from repository_relevance import (
+from models.architecture_model import ArchitectureModel
+from models.models import RepositoryModel
+from analyzers.repository_relevance import (
     RepositoryArea,
     analyze_relevance,
     classify_path,

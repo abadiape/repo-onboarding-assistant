@@ -3,8 +3,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models import Dependency, RepositoryFile, RepositoryModel
-from visualizations import (
+from models.models import Dependency, RepositoryFile, RepositoryModel
+from artifacts.visualizations import (
     render_architecture_overview_mermaid,
     render_dependency_graph_mermaid,
     render_module_graph_mermaid,

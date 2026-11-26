@@ -4,8 +4,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePosixPath
 
-from architecture_model import ArchitectureModel
-from domain_discovery import BusinessCapability, DomainDiscovery
+from models.architecture_model import ArchitectureModel
+from analyzers.domain_discovery import BusinessCapability, DomainDiscovery
 
 
 _HIGH_IMPACT_DOMAINS = {

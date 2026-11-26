@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from pathlib import PurePosixPath
 
-from models import Dependency, RepositoryModel
+from models.models import Dependency, RepositoryModel
 
 
 _IGNORED = {

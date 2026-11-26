@@ -5,8 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models import Dependency, RepositoryModel
-from repository_scan import scan_repository
+from models.models import Dependency, RepositoryModel
+from analyzers.repository_scan import scan_repository
 
 
 def make_python_repo(base: Path) -> Path:
