@@ -138,6 +138,9 @@ def test_domain_discovery_outputs_and_business_first_learning_path(tmp_path):
     executive_summary = (out / "executive_summary.md").read_text(encoding="utf-8")
     assert "Where business value appears concentrated" in executive_summary
     assert len(executive_summary.split()) < 300
+    assert "concentrate custom business behavior" in executive_summary
+    assert "`ABCVisa`" in executive_summary
+    assert "sample Magento Commerce" not in executive_summary
     assert "vendor or generated code" in executive_summary
     assert "ErpSync" in executive_summary and "OPSStock" in executive_summary
     critical_modules = (out / "critical_modules.md").read_text(encoding="utf-8")
@@ -169,14 +172,23 @@ def test_domain_discovery_outputs_and_business_first_learning_path(tmp_path):
     assert "Understand Payments" in first_week_story
     repository_story = (out / "repository_story.md").read_text(encoding="utf-8")
     assert "## What Makes This Repository Different" in repository_story
+    assert "## What Appears Most Customized" in repository_story
     assert "## How Value Moves Through The System" in repository_story
+    assert "## What Appears Business Critical" in repository_story
+    assert "## Repository-Specific Insights" in repository_story
     assert "## Most Important Customizations" in repository_story
     assert "`ABCVisa`" in repository_story
     assert "`ErpSync`" in repository_story
     assert "`OPSStock`" in repository_story
+    assert "complete payment through customizations such as `ABCVisa`" in repository_story
     risk_story = (out / "business_risk_story.md").read_text(encoding="utf-8")
     assert "onboarding prioritization" in risk_story
     assert "Payments" in risk_story and "`ABCVisa`" in risk_story
+    briefing = (out / "first_day_briefing.md").read_text(encoding="utf-8")
+    assert "sample Magento Commerce" not in briefing
+    assert "If you want to understand how payment behavior is implemented, start with `ABCVisa`" in briefing
+    assert "`OPSStock`" in briefing
+    assert "`HomeDelivery`" in briefing
 
     learning_path = (out / "learning_path.md").read_text(encoding="utf-8")
     assert "## Step 1: Understand the business domains" in learning_path

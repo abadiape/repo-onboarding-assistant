@@ -332,38 +332,84 @@ def render_executive_summary_markdown(
         if item.business_impact in {"Critical", "High"}
     ][:4]
     top_modules = [item for item in insights.ranked_modules if item.tier != "Supporting"][:4]
-    description = architecture.description.strip() or (
-        f"{architecture.system_name} is a {architecture.system_type} repository."
-    )
+    customized_domains = [
+        item for item in insights.domain_impacts if item.modules
+    ][:4]
+    platform = ", ".join(architecture.frameworks[:2]) or architecture.system_type
+    if customized_domains:
+        areas = "; ".join(
+            f"{item.name} ({', '.join(item.modules[:2])})"
+            for item in customized_domains
+        )
+        description = (
+            f"This {platform} implementation has {len(insights.ranked_modules)} "
+            f"discovered project-owned modules. Findings concentrate custom business "
+            f"behavior in {areas}."
+        )
+    elif high_value:
+        description = (
+            "The repository scan identifies business-priority areas in "
+            + ", ".join(item.name for item in high_value[:3])
+            + ", but did not match those areas to specific custom modules."
+        )
+    else:
+        description = architecture.description.strip() or (
+            f"{architecture.system_name} is a {architecture.system_type} repository."
+        )
     lines = [
         f"# Executive Summary — {architecture.system_name}",
         "",
         description,
     ]
-    if architecture.frameworks and insights.ranked_modules:
-        lines += [
-            "",
-            "The detected " + ", ".join(architecture.frameworks)
-            + " architecture includes project-owned modules; their business roles are inferred below.",
-        ]
     lines += ["", "## Where business value appears concentrated", ""]
     if high_value:
-        lines += [
-            f"- **{item.name}** — {item.rationale} "
-            f"(business impact: {item.business_impact}; "
-            f"evidence confidence: {item.confidence:.0%}, heuristic)"
-            for item in high_value
-        ]
+        for item in high_value:
+            evidence = []
+            if item.modules:
+                evidence.append(
+                    "matched modules " + ", ".join(f"`{name}`" for name in item.modules[:4])
+                )
+            if item.integrations:
+                evidence.append(
+                    "configured integrations "
+                    + ", ".join(f"`{name}`" for name in item.integrations[:3])
+                )
+            related_capabilities = [
+                capability.name for capability in insights.capabilities
+                if item.name in capability.domains
+            ][:2]
+            if related_capabilities:
+                evidence.append("capabilities " + ", ".join(related_capabilities))
+            finding = (
+                "Repository evidence links this area to " + "; ".join(evidence) + ". "
+                if evidence else
+                item.rationale + " "
+            )
+            lines.append(
+                f"- **{item.name}** — {finding}(impact: {item.business_impact}; "
+                f"evidence: {item.confidence:.0%}, heuristic)"
+            )
     else:
         lines.append(
             "No high-impact domain was confidently inferred; validate business priorities with a maintainer."
         )
     lines += ["", "## Recommended first focus", ""]
     if top_modules:
-        lines += [
-            f"{index}. **{module.name}** — {', '.join(module.domains) or 'custom application code'}."
-            for index, module in enumerate(top_modules, 1)
-        ]
+        for index, module in enumerate(top_modules, 1):
+            capabilities = [
+                capability.name for capability in insights.capabilities
+                if module.name in capability.modules
+            ][:2]
+            reason = (
+                "associated with " + ", ".join(module.domains)
+                if module.domains else
+                "identified as project-owned custom application code"
+            )
+            if capabilities:
+                reason += "; capability: " + ", ".join(capabilities)
+            lines.append(
+                f"{index}. **{module.name}** — {reason}. Confirm its role with a maintainer."
+            )
     else:
         lines.append("Start with the repository overview and ask which workflows are most important.")
     if insights.critical_integrations:
