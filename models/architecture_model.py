@@ -60,6 +60,7 @@ class ArchitectureModel:
     frameworks: list[str] = field(default_factory=list)
     repository_relevance: RepositoryRelevance = field(default_factory=RepositoryRelevance)
     public_api_entry_points: list[str] = field(default_factory=list)
+    optional_integrations: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

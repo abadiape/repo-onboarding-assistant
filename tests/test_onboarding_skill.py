@@ -12,6 +12,92 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from skills.onboarding_skill import run_onboarding
 
 
+def test_optional_qdrant_appears_in_onboarding_without_implying_deployment(tmp_path):
+    repo = tmp_path / "library"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "library"\ndependencies = []\n'
+        '[project.optional-dependencies]\nqdrant = ["qdrant-client>=1.9"]\n',
+        encoding="utf-8",
+    )
+    out = tmp_path / "output"
+    run_onboarding(repo, out)
+    architecture = json.loads((out / "architecture_map.json").read_text())
+    hub = json.loads((out / "knowledge_hub.json").read_text())
+    optional = architecture["optional_integrations"]
+    assert len(optional) == 1
+    assert "Qdrant" in optional[0] and "pyproject.toml" in optional[0]
+    assert "Qdrant" not in " ".join(architecture["data_stores"])
+    assert hub["architecture"]["optional_integrations"] == optional
+    html = (out / "knowledge_hub.html").read_text()
+    assert "Optional integrations (not proof of activation or deployment)" in html
+    assert "qdrant-client" in html
+    assert "Qdrant" in (out / "architecture_summary.md").read_text()
+
+
+def test_magento_api_inventory_in_generated_hub(tmp_path):
+    repo = tmp_path / "shop"
+    module = repo / "app" / "code" / "Example" / "Checkout"
+    (module / "etc").mkdir(parents=True)
+    (module / "Api").mkdir()
+    (module / "etc" / "webapi.xml").write_text(
+        '<routes><route url="/V1/pay/:id" method="POST">'
+        '<service class="Example\\Checkout\\Api\\PaymentInterface" method="pay"/>'
+        '<resources><resource ref="anonymous"/></resources>'
+        '<data><parameter name="customerId" force="true">secret-value</parameter></data>'
+        '</route><route url="/V1/pay/:id" method="GET">'
+        '<service class="Other\\Module\\Api\\PaymentInterface" method="get"/>'
+        '</route></routes>', encoding="utf-8",
+    )
+    (module / "Api" / "PaymentInterface.php").write_text(
+        '<?php\n/**\n * @param int $id\n * @param string $token\n'
+        ' * @return bool\n */\npublic function pay($id, $token = null);\n',
+        encoding="utf-8",
+    )
+    bad = repo / "app" / "code" / "Example" / "Bad" / "etc"
+    bad.mkdir(parents=True)
+    (bad / "webapi.xml").write_text("<routes>", encoding="utf-8")
+    vendor = repo / "vendor" / "Example" / "Checkout" / "etc"
+    vendor.mkdir(parents=True)
+    (vendor / "webapi.xml").write_text(
+        '<routes><route url="/vendor" method="GET"/></routes>', encoding="utf-8",
+    )
+    out = tmp_path / "output"
+    run_onboarding(repo, out)
+    hub = json.loads((out / "knowledge_hub.json").read_text())
+    inventory = hub["api_inventory"]
+    assert len(inventory["endpoints"]) == 2
+    post = next(item for item in inventory["endpoints"] if item["method"] == "POST")
+    assert post["path"] == "/V1/pay/:id"
+    assert post["resources"] == ["anonymous"]
+    assert post["parameters"] == [
+        {"name": "id", "type": "int", "optional": False},
+        {"name": "token", "type": "string", "optional": True},
+    ]
+    assert post["return_type"] == "bool"
+    assert post["forced_parameters"] == ["customerId"]
+    assert "secret-value" not in json.dumps(hub)
+    assert len(inventory["warnings"]) == 1
+    html = (out / "knowledge_hub.html").read_text()
+    assert 'href="#apis"' in html
+    assert 'id="api-search"' in html
+    assert "/V1/pay/:id" in html
+    assert html.count('class="card api-group"') == 1
+    assert html.count('class="card api-card"') == 2
+    assert '(2 declarations: POST, GET)' in html
+    assert '<details class="card api-card"><summary>POST ' in html
+    assert '<details class="card api-card"><summary>GET ' in html
+    assert html.count("<strong>Configured parameter names:</strong>") == 1
+    assert "<strong>Configured parameter names:</strong> customerId" in html
+    assert "outbound service calls are not inventoried" in html
+    assert "local clone without access to a running environment" in html
+    assert "Paths are source declarations, not complete URLs" in html
+    assert "Storefront code or external clients may call them" in html
+    assert "<strong>Direction:</strong>" not in html
+    assert post["direction"] == "incoming"
+    assert "secret-value" not in html
+
+
 @pytest.mark.parametrize("module", [False, True])
 def test_cli_entrypoint_after_reorganization(tmp_path, module):
     root = Path(__file__).resolve().parent.parent

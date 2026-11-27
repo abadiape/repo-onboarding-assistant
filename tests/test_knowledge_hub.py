@@ -41,6 +41,7 @@ def test_hub_preserves_inferred_edges_and_escapes_untrusted_names():
     assert "https://" not in html
     assert "flowchart TD" not in html
     assert "<svg " in html
+    assert 'href="#apis"' not in html
 
 
 def test_flow_diagram_explains_components_and_relationship_evidence():
@@ -65,3 +66,37 @@ def test_flow_diagram_explains_components_and_relationship_evidence():
     assert "Model paths may hold data." in html
     assert "Provider roles vary." in html
     assert "src/model/example.py:2" in html
+
+
+def test_api_routes_group_methods_without_dropping_duplicate_declarations():
+    def endpoint(path, method, module):
+        return {
+            "path": path, "method": method, "module": module, "source": module,
+            "service": "", "service_method": "", "resources": [], "forced_parameters": [],
+        }
+
+    model = RepositoryModel(repository_name="example", api_inventory={"endpoints": [
+        endpoint("/V1/other", "POST", "Other"),
+        endpoint("/V1/zebra", "GET", "Last"),
+        endpoint("/V1/<item>", "GET", "First"),
+        endpoint("/V1/Banana", "POST", "Banana"),
+        endpoint("/V1/<item>", "PUT", "Second"),
+        endpoint("/V1/<item>", "GET", "Third"),
+    ]})
+    hub = build_knowledge_hub(
+        model, ArchitectureModel(system_name="example", system_type="application", description=""),
+        DomainDiscovery(), BusinessInsights(),
+        BusinessNarrative(system_name="example", system_purpose="Example"), [],
+    )
+    html = render_knowledge_hub_html(hub)
+    groups = html.split('<details class="card api-group">')[1:]
+    assert len(groups) == 4
+    assert '<span class="api-path">/V1/&lt;item&gt;</span>' in groups[0]
+    assert '(3 declarations: GET, PUT)' in groups[0]
+    assert groups[0].count('class="card api-card"') == 3
+    assert all(name in groups[0] for name in ("First", "Second", "Third"))
+    assert '<span class="api-path">/V1/Banana</span>' in groups[1]
+    assert '<span class="api-path">/V1/other</span>' in groups[2]
+    assert '<span class="api-path">/V1/zebra</span>' in groups[3]
+    assert all(group.count('class="card api-card"') == 1 for group in groups[1:])
+    assert "/V1/<item>" not in html

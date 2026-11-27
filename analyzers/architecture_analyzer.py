@@ -87,6 +87,7 @@ _SERVICE_TERMS = {
     "psycopg": ("PostgreSQL", "relational database"),
     "psycopg2": ("PostgreSQL", "relational database"),
     "asyncpg": ("PostgreSQL", "relational database"),
+    "qdrant": ("Qdrant", "vector database"),
     "mysql": ("MySQL", "relational database"),
     "pymysql": ("MySQL", "relational database"),
     "mariadb": ("MariaDB", "relational database"),
@@ -1436,6 +1437,34 @@ def _external_facts(model: RepositoryModel, files: dict[str, str]) -> tuple[list
     return sorted(services), sorted(stores)
 
 
+def _optional_integrations(model: RepositoryModel) -> list[str]:
+    found: dict[tuple[str, str, str, str], set[str]] = {}
+    for dependency in model.dependencies:
+        if not (dependency.scope == "optional" or dependency.scope.startswith("optional:")):
+            continue
+        if set(_parts(dependency.source)) & _IGNORED_AREAS or re.search(
+            r"(?:^|[._-])(?:example|sample|test|dev|development|local)(?:[._-]|$)",
+            Path(dependency.source).name, re.I,
+        ):
+            continue
+        extra = dependency.scope.removeprefix("optional:")
+        if extra != "optional" and re.search(
+            r"(?:^|[._-])(?:example|examples|sample|test|tests|dev|development|local)(?:[._-]|$)",
+            extra, re.I,
+        ):
+            continue
+        for term, (name, kind) in _SERVICE_TERMS.items():
+            if re.search(rf"\b{re.escape(term)}\b", dependency.name, re.I):
+                key = (name, kind, dependency.name, dependency.source)
+                found.setdefault(key, set()).add(extra)
+    return [
+        f"{name} ({kind}; optional dependency {package} in {source}"
+        + (f'; extras: {", ".join(sorted(extras - {"optional"}))}' if extras - {"optional"} else "")
+        + ")"
+        for (name, kind, package, source), extras in sorted(found.items())
+    ]
+
+
 def _execution_flows(
     components: list[ArchitectureComponent],
     relationships: list[ArchitectureRelationship],
@@ -1636,6 +1665,7 @@ def extract_architecture(model: RepositoryModel) -> ArchitectureModel:
         public_api_entry_points=public_api_paths,
         external_dependencies=external_dependencies,
         data_stores=data_stores,
+        optional_integrations=_optional_integrations(model),
         execution_flows=flow,
         detected_patterns=list(model.detected_patterns),
         recommended_learning_path=list(dict.fromkeys([
@@ -1795,6 +1825,30 @@ def render_execution_flow_mermaid(model: ArchitectureModel) -> str:
     components = {component.id: component for component in model.components}
     flows = model.execution_flows
     if not flows:
+        if any("magento" in framework.lower() for framework in model.frameworks):
+            relationships = [
+                relation for relation in model.relationships
+                if relation.source in components and relation.target in components
+            ]
+            associations = _execution_flows(
+                model.components, relationships, model.entry_points, [], [],
+            )
+            if associations:
+                path = associations[0]["paths"][0]
+                notice = "association_notice"
+                while notice in components:
+                    notice += "_"
+                graph = [
+                    "flowchart LR",
+                    f'    {notice}["Associations only - not a verified execution sequence or runtime calls"]',
+                ]
+                for component_id in path["component_ids"]:
+                    graph.append(f'    {component_id}["{_mermaid_text(components[component_id].name)}"]')
+                for source, target, relation in zip(
+                    path["component_ids"], path["component_ids"][1:], path["relationship_types"],
+                ):
+                    graph.append(f"    {source} -->|{_mermaid_text(relation)}| {target}")
+                return "\n".join(graph) + "\n"
         lines.append("    Note over User: No component execution path could be inferred")
         return "\n".join(lines) + "\n"
 
@@ -2021,6 +2075,9 @@ def render_architecture_summary_markdown(model: ArchitectureModel) -> str:
     if model.external_dependencies or model.data_stores:
         lines += ["", "Declared or configured integrations and data stores (not proof of active deployment):"]
         lines += [f"- {item}" for item in [*model.external_dependencies, *model.data_stores]]
+    if model.optional_integrations:
+        lines += ["", "Optional integrations (not proof of activation or deployment):"]
+        lines += [f"- {item}" for item in model.optional_integrations]
     if model.deployment_architecture:
         lines += ["", "Deployment architecture:", *[f"- {item}" for item in model.deployment_architecture]]
     lines += ["", "## Recommended Learning Path", ""]
