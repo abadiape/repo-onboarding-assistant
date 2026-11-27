@@ -112,6 +112,13 @@ def scan_repository(
         entry_points=_collect_entry_points(root, files_by_name),
         build_instructions=build_instructions,
         test_instructions=test_instructions,
-        api_inventory=collect_api_inventory(root, files_by_name.get("webapi.xml", [])),
+        api_inventory=collect_api_inventory(
+            root,
+            files_by_name.get("webapi.xml", []),
+            spec_files=(
+                path for paths in files_by_name.values() for path in paths
+                if path.suffix.casefold() in {".json", ".yaml", ".yml"}
+            ),
+        ),
     )
     return enrich_repository_model(model, analyzers)

@@ -1,271 +1,227 @@
 # Repository Onboarding Assistant
 
-Repository Onboarding Assistant scans a source repository and creates a
-developer-oriented overview, learning path, and machine-readable inventory.
-It is a standalone skill built on the
-[LLM Harness Lite Artifact API](https://github.com/abadiape/llm-harness-lite);
-the repository scanner and analysis models do not depend on the harness.
+## Overview
 
-The scanner is intended to become the shared foundation for repository
-onboarding, architecture exploration, security review, documentation
-generation, and modernization advice. Those capabilities should consume
-reusable repository facts rather than each implementing a separate scanner.
+Repository Onboarding Assistant is a repository intelligence and onboarding
+platform. It builds reusable repository knowledge from a local source tree,
+then turns that knowledge into architecture, domain, business, and onboarding
+guidance. Its models and evidence also provide a foundation for future
+repository analysis capabilities.
 
-## Current MVP
+The analysis moves from inventory discovery through architecture and domain
+discovery, business insights, and narrative generation to a navigable
+Knowledge Hub. It is a standalone skill built on the
+[LLM Harness Lite Artifact API](https://github.com/abadiape/llm-harness-lite)
+(version 0.2.0 or later); repository analysis and its models do not depend on
+the harness.
 
-The scanner and architecture analyzer are deliberately lightweight and
-read-only. The architecture analyzer does not build an AST or resolve calls;
-it uses bounded lexical checks for imports/re-exports, type and class
-references, dependency registrations, documentation, and configuration, then
-combines those signals with framework/layout conventions. Relationships carry
-confidence and file/line evidence, and are not presented as observed call edges.
-Confidence values are heuristic scores, not calibrated probabilities. Import
-edges require a unique match to a model-listed local source file; unresolved
-imports are omitted. Configuration registration discovery currently recognizes
-provider/binding/registration sections in YAML, and other detections are
-best-effort lexical heuristics, not full language or dependency-injection
-resolution.
+## Current Capabilities
 
-It currently inventories:
+### Repository Inventory
 
-- Languages and selected frameworks, detected from manifests and file extensions
-- Framework-specific conventions and dependency categories from applicable analyzers
-- Normalized dependencies and their manifest source/scope
-- Repository-relative file records, directory paths, and detected conventions
-- Package managers, build backends, and common test frameworks
-- Important files, onboarding documents, and top-level directories
-- Likely entry points, build/test suggestions, and CI/CD configuration files
-- Shell commands documented in relevant Markdown code blocks
-- Inline `run` commands found in CI workflow YAML
-- Project-owned Magento `app/code/*/*/etc/webapi.xml` route declarations and
-  locally declared service contract parameters and return types
+The inventory discovers:
 
-When Magento route declarations are present, the offline knowledge hub includes
-a searchable API Inventory view and `knowledge_hub.json` contains the same
-data. The view groups declarations by path in case-insensitive alphabetical
-order, with expandable methods; duplicate
-declarations or overrides remain separate, with their source, service and
-access resources. It can be generated from a local clone without access to a
-running environment. Paths are source declarations, not complete URLs; base
-URLs and REST or store prefixes can vary by environment, as can deployed code,
-module enablement and overrides. Routes may be called by storefront code or
-external clients, and their implementations may use local data or call external
-services. The PHP contract extraction is best-effort, and configured parameter
-values are intentionally omitted. This is
-not Swagger or a complete OpenAPI specification: vendor/platform routes,
-outbound service calls, inherited contracts, resolved dependency injection,
-runtime module activation, request/response schemas and endpoint criticality
-are not determined. Confirm the effective routes and checkout dependencies with
-maintainers or the running deployment. Malformed route files are reported in
-the inventory rather than silently omitted.
+- Languages and selected frameworks from manifests, file extensions, and
+  framework-specific conventions
+- Normalized manifest dependencies, their source and scope, and dependency
+  categories; Composer and npm lockfile entries are also collected
+- Repository-relative file records, directory paths, detected conventions,
+  top-level directories, important files, and onboarding documents
+- Package managers, build backends, common test frameworks, and likely entry
+  points
+- Build and test suggestions, commands in relevant Markdown code blocks, CI/CD
+  configuration files, and inline `run` commands in CI workflow YAML
+- API operations declared in local OpenAPI 3.x and Swagger 2.0 JSON or YAML
+  documents, and project-owned Magento `app/code/*/*/etc/webapi.xml` route
+  declarations with best-effort local service contract details
 
-Documented commands are surfaced as evidence, not executed. Build and test
-suggestions inferred from manifests are heuristics; the commands declared by
-the project or its CI should be preferred when they disagree.
+Path conventions classify application, infrastructure, supporting, vendor, and
+generated areas. Vendor and generated directory boundaries are recorded but
+not traversed. Custom modules, themes, workspace packages, and layered business
+areas are retained for exploration. Ownership and framework group labels are
+heuristics.
 
-## Analyzer extensions
+Composer and npm lockfiles contribute distinct declared or locked package names
+to namespace-level groups. Counts are deduplicated by package name, not
+installation or version. Individual entries and group members remain available
+for drill-down; large lists are summarized.
 
-`analyzers/analyzers.py` runs `GenericAnalyzer` followed by each applicable language
-analyzer. Implement the small `Analyzer` interface (`supports` and `analyze`),
-then add the analyzer to `DEFAULT_ANALYZERS`; callers can also pass a custom
-analyzer sequence to `scan_repository`. Analyzers enrich `RepositoryModel`;
-artifact renderers consume that model separately from scanning.
+### Architecture Discovery
+
+Architecture Discovery combines repository structure and conventions with
+bounded source, README, documentation, and configuration evidence to infer
+components, responsibilities, relationships, subsystems, and supported
+architectural layers. It recognizes feature boundaries containing multiple
+layers and uniquely matched public modules. Diagrams focus on the repository's
+components and relationships, and their legends include available evidence.
+
+Components accumulate evidence across categories. Confidence measures support
+for a component; significance combines relevance, distinct relationships,
+references from prominent components, and position in the selected conceptual
+flow. Significance is displayed as High (at least 0.55), Medium (at least 0.20),
+or Low. The architecture JSON also retains relevance scores and locations.
+File count alone does not determine priority.
+
+External services and data stores are inferred from runtime dependencies,
+top-level imports, and recognized runtime configuration. Recognized optional
+integration dependencies are reported separately, with the manifest and extra
+when available. An explicitly documented retrieval-as-tool integration is
+shown as an optional branch, not a mandatory agent step.
+
+For Magento, model and provider names are treated as cross-module conventions,
+not as evidence of one shared domain layer or a specific integration role.
+Architecture overviews summarize the detected module and theme layout rather
+than treating an inherited README template as the current deployment's
+authoritative description. Elsewhere, README descriptions remain attributed
+to the README. A Python package initializer that re-exports local modules is
+identified as a public API starting point, not necessarily a runtime entry
+point.
+
+### Domain Discovery
+
+Repository archetype classification uses bounded README and manifest
+descriptions, repository names, declared Magento dependencies, and project
+layout. The selected archetype, heuristic confidence, evidence, and alternative
+candidates are recorded in `knowledge_hub.json` and `domain_map.json`. An
+unknown classification remains unknown rather than defaulting to a business
+application.
+
+For inferred business applications, Domain Discovery uses project-owned
+module boundaries, documentation, source paths, and Architecture Discovery's
+external dependency facts to suggest business domains, capabilities, and
+integration boundaries. It places business-focused steps first in the
+learning path. For other archetypes, including unknown, commerce-specific
+inference is suppressed and technical reports and learning paths point to
+matching source and documentation evidence.
+
+### Business Analysis
+
+Business Insights assesses evidence confidence separately from estimated
+business impact and onboarding importance. It ranks modules, prioritizes
+workflows, and recommends a first-week learning plan. Impact reflects workflow
+categories: payment and order workflows are rated Critical; inventory, ERP,
+shipping, and customer workflows are High when there is direct evidence.
+Documentation-only mentions remain low impact unless supported by a custom
+module, source path, or Architecture Discovery integration evidence.
+
+Module recommendations favor domain representatives and use name-based
+heuristics to defer some supporting customizations. Human-readable reports
+show at most ten prioritized modules; the domain map retains the complete
+inventory. Domain evidence appears in expandable report sections and the
+domain map.
+
+Narrative Generation combines architecture, domain, and business findings into
+repository-specific stories, workflow guides, and onboarding briefs. It
+prioritizes matched custom modules, capabilities, and configured integrations;
+repository descriptions provide fallback context when direct business
+evidence is unavailable.
+
+### Knowledge Hub and Dashboard
+
+The generated Knowledge Hub brings archetype evidence, technical topics or
+business findings, architecture, a five-day plan, and an artifact explorer
+together in an offline HTML experience. A separate dashboard presents
+onboarding content and architecture diagrams. When API declarations or
+discovery warnings are found, the hub also provides a searchable API
+Inventory. See [Knowledge Hub](#knowledge-hub) for details.
+
+## Analysis Architecture
+
+```text
+Repository
+    ↓
+Inventory Discovery
+    ↓
+Architecture Discovery
+    ↓
+Domain Discovery
+    ↓
+Business Insights
+    ↓
+Narrative Generation
+    ↓
+Knowledge Hub
+```
+
+This is a conceptual view of the processing flow, not a strictly linear data
+dependency: later stages also consume earlier models directly.
+
+1. **Inventory Discovery** scans the repository and enriches a
+   `RepositoryModel` with files, dependencies, tooling, commands, and other
+   observed or convention-based facts.
+2. **Architecture Discovery** derives an `ArchitectureModel` of components,
+   relationships, evidence, and architectural groupings.
+3. **Domain Discovery** uses an independently determined repository archetype
+   alongside inventory and architecture findings to identify relevant domains,
+   capabilities, and integrations.
+4. **Business Insights** prioritizes domain and architecture findings, or
+   produces technical guidance for non-business archetypes.
+5. **Narrative Generation** synthesizes those findings into stories, workflow
+   guidance, and onboarding briefs.
+6. **Knowledge Hub** aggregates the structured results into JSON and renders
+   the offline HTML experience. Separate renderers produce Markdown, diagrams,
+   the dashboard, and other artifacts.
+
+Archetype classification runs after inventory discovery and before domain
+discovery. Inventory-based onboarding analysis also contributes to the summary
+and learning path.
+
+## Repository Knowledge Model
+
+Repository knowledge is represented by related, tool-independent models rather
+than a single scanner report:
+
+| Entity or finding | Current representation |
+|---|---|
+| Repository, files, directories | Metadata, relative paths, file roles, languages, and detected patterns in `RepositoryModel` |
+| Dependencies | Manifest declarations and lockfile entries with source, scope, and category |
+| Components and architecture | Components, subsystems, layers, responsibilities, locations, and inferred flows in `ArchitectureModel` |
+| Domains and capabilities | Inferred business domains, responsibilities, capabilities, and custom modules in `DomainDiscovery` |
+| Integrations | Architecture dependency and data-store signals, optional integrations, and inferred business integration boundaries |
+| Evidence and relationships | Supporting evidence on findings; architectural relationships with source, target, type, confidence, and evidence |
+| Business insights | Domain impacts, module priorities, recommendations, and learning plans |
+
+Inventory facts are kept separate from consumer-specific conclusions:
+onboarding, architecture, and business analysis interpret the available
+evidence for different purposes. Findings retain supporting provenance where
+available, including source paths and, for some relationships, line locations.
+Not every current finding has a detector identifier or a full source span.
+Direct observations should be distinguished from inferences; unresolved or
+unknown relationships must not be presented as certain.
+
+## Analyzer Extensions
+
+[`analyzers/analyzers.py`](analyzers/analyzers.py) runs `GenericAnalyzer`
+followed by each applicable language analyzer. Implement the `Analyzer`
+interface (`supports` and `analyze`) and add the analyzer to
+`DEFAULT_ANALYZERS`; callers can also pass a custom analyzer sequence to
+`scan_repository`. Analyzers enrich `RepositoryModel`, while artifact renderers
+consume the resulting models separately.
+
 Scanner helpers are grouped by file discovery, manifests, tooling, and
 onboarding evidence. Architecture discovery separates evidence collection,
-component and relationship inference, and model assembly from diagram and
-report rendering. Business models live in `models/`, while business report
+component and relationship inference, scoring, and model assembly from diagram
+and report rendering. Business models live in `models/`, and business report
 renderers live in `artifacts/`. Existing public analyzer import paths remain
 available for callers.
-`analyzers/architecture_analyzer.py` extracts a framework-aware `ArchitectureModel`
-from repository structure, patterns, public API exports, source references,
-and bounded README, documentation, and configuration evidence, then renders
-architecture artifacts from that intermediate model. It also recognizes feature
-boundaries containing multiple architectural layers and uniquely matched public
-modules. Components accumulate evidence across categories: confidence measures
-support for a component, while significance combines relevance, distinct
-relationships, references from prominent components, and position in the
-selected conceptual flow. The JSON retains the earlier relevance score.
-Significance is shown as High (at least 0.55), Medium (at least 0.20), or Low.
-All scores are heuristics rather than probabilities, and the number of files
-alone does not determine priority. The analyzer groups recognized roles into
-only the architectural layers supported by the detected components, and
-describes their constituent roles and representative paths. These groupings
-are not proof of actual runtime boundaries. For Magento, model and provider
-names are treated as cross-module conventions, not a single domain layer or a
-specific integration role. Generated Magento static and preprocessed assets are
-excluded from architectural inference.
-Diagrams focus on the analyzed repository's components and inferred
-relationships, not the scanner pipeline or a dependency inventory.
-Recognized optional integration dependencies are reported separately from
-runtime integration signals, with their manifest and extra when available.
-Neither establishes which services are active in a particular deployment.
-Diagram legends explain component names and include available relationship
-evidence. Magento imports and type references alone do not establish an
-execution sequence. Magento architecture overviews summarize the detected
-module and theme layout rather than treating an inherited README template as
-an authoritative description of the current deployment; other README descriptions
-remain attributed to the README.
-For other repositories, README and documentation evidence remains available
-to architecture inference. An explicitly documented retrieval-as-tool
-integration appears as an optional branch, not a mandatory agent step.
-When a Python package initializer re-exports local modules, the first-day
-plan identifies it as a public API starting point, not necessarily a runtime
-entry point.
-`analyzers/repository_archetype.py` classifies repository purpose before domain
-discovery using bounded README and manifest descriptions, repository names,
-declared Magento dependencies, and project layout. The selected archetype,
-heuristic confidence, evidence, and alternative candidates are recorded in
-`knowledge_hub.json` and `domain_map.json`. Scores are not probabilities and
-classifications can be wrong; review the evidence with a maintainer. An unknown
-classification remains unknown rather than assuming a business application.
 
-For inferred business applications, `analyzers/domain_discovery.py` consumes project-owned module boundaries, repository
-documentation, source paths, and Architecture Discovery's external dependency
-facts to infer business domains, capabilities, and integration boundaries.
-These are convention-based suggestions with supporting evidence, not
-authoritative ownership or business rules. Domain Discovery is separate from
-Architecture Discovery and puts business-focused steps first in the learning
-path. For all other archetypes, including unknown, commerce-specific domain
-inference is conservatively suppressed; this may omit real business concepts
-in mixed-purpose repositories. Technical reports and learning paths instead
-point to matching source and documentation evidence.
-`analyzers/business_insights.py` scores evidence confidence separately from estimated
-business impact (Critical, High, Medium, or Low) and onboarding importance, then
-ranks modules and plans a first week. Impact reflects workflow categories, not
-confidence: payment and order workflows are rated Critical; inventory, ERP,
-shipping, and customer workflows are High when there is direct evidence.
-Module recommendations favor domain representatives and use name-based
-heuristics to defer some supporting customizations; they do not prove a module's
-runtime role. Human-readable reports show at most ten prioritized modules; the
-domain map retains the complete inventory. Domain evidence is available in
-expandable report sections and the domain map. Scores are heuristic and do not
-represent measured revenue or calibrated probabilities. Documentation-only
-mentions remain low impact unless supported by a custom module, source path, or
-Architecture Discovery integration evidence. Integration criticality and runtime
-activation must be confirmed with maintainers.
-`analyzers/narrative_generation.py` combines architecture, domain-discovery, and
-business-insight findings into repository-specific stories, workflow guides,
-and onboarding briefs. Business narrative summaries prioritize matched custom modules,
-capabilities, and configured integrations; repository descriptions are fallback
-context rather than the primary explanation when direct business evidence exists.
-Module/domain links and inferred flows remain onboarding hypotheses, not observed
-runtime call order or operational risk.
+## Running the Skill
 
-`analyzers/repository_relevance.py` classifies project, infrastructure, vendor, and
-generated areas using path conventions. The scanner records vendor/generated
-directory boundaries but does not descend into them. Application architecture
-is inferred from the remaining paths; ownership and framework group labels
-are heuristic, not authoritative. Custom module, theme, workspace package,
-and layered business-area paths are retained for exploration.
-
-Composer and npm lockfiles contribute distinct declared or locked package
-names to namespace-level groups. Counts are deduplicated by package name, not
-installation or version, and lockfiles do not prove packages are installed.
-Lockfile entries and individual group members remain available for drill-down;
-vendor manifests are not traversed, so a missing lockfile limits visibility.
-Large dependency lists are summarized rather than displayed as individual
-declarations.
-
-Run the skill from this directory:
+From the repository root:
 
 ```bash
 pip install -r requirements.txt
 python skills/onboarding_skill.py /path/to/repository
 python skills/onboarding_skill.py /path/to/repository --output-dir ./my-output
-python skills/onboarding_skill.py /path/to/repository --module-graph app/code/Company/Module
+python skills/onboarding_skill.py /path/to/repository --module-graph packages/my-package
 ```
 
-The entry point can also be run as `python -m skills.onboarding_skill` from
-the repository root. Skill metadata is in `skills/skill.yaml`; its entry point
-and capability paths are relative to that file.
-
-Open `knowledge_hub.html` in the output directory to start onboarding. It is
-generated from `knowledge_hub.json`, embeds its content, and works from a local
-file without a server or network connection. The hub presents archetype evidence,
-repository-specific technical topics or business findings, architecture, a five-day plan, and an artifact
-explorer. Its SVG visualizations support zoom, drag-to-pan, fullscreen, and
-export; they summarize inferred architecture relationships, conceptual flow,
-and workflow/domain associations rather than executing Mermaid or showing
-runtime traces. Inferred priorities and business impacts should be confirmed
-with maintainers.
-
-`--module-graph` is optional and accepts a detected repository-relative area
-listed in `architecture_map.json` or the dashboard. It generates
-`module_graph.mmd`; an unknown area is reported as an error. System overview
-and subsystem diagrams use at most 15 nodes, aggregating large models and
-showing an "Other" count when areas do not fit. The full area list is in the
-architecture map and dashboard.
-
-By default, the skill writes these artifacts to `outputs/`:
-
-- `summary.md` — technologies, repository structure, reading suggestions, and
-  documented setup/CI commands
-- `learning_path.md` — a suggested sequence for becoming productive
-- `repository_map.json` — the serialized `RepositoryModel`, including
-  normalized metadata, dependencies, directories, files, and detected patterns
-- `architecture_summary.md` — system narrative, responsibilities, execution
-  flow, and recommended exploration order
-- `architecture_map.json` — machine-readable components, subsystems, layers,
-  responsibilities, inferred relationships, entry points, external
-  integrations, data stores, and detected patterns; each relationship includes
-  a confidence score and supporting evidence; components also include relevance
-  and significance scores and locations, plus repository relevance and grouped
-  dependency information
-- `business_domains.md` — inferred responsibilities, business value, impact,
-  starting modules, learning guidance, and expandable evidence
-- `business_capabilities.md` — capabilities grouped by business workflow and
-  inferred external ownership boundaries
-- `onboarding_priorities.md` — a suggested one-week business-first learning
-  order, including areas to defer initially
-- `domain_map.json` — structured domains, capabilities, integrations, custom
-  modules, priorities, and business-impact assessments
-- `executive_summary.md` — concise repository purpose, value areas, and initial
-  focus
-- `critical_modules.md` — top ten modules with domain ownership, impact, and
-  rationale; the domain map retains remaining modules
-- `first_week_onboarding.md` — a five-day business-focused onboarding plan
-- `business_insights.md` — prioritized value areas, integration boundaries, and
-  maintainer-confirmable recommendations
-- `business_story.md` — inferred system purpose, business flow, primary domains,
-  critical integrations, and first-focus recommendations
-- `critical_workflows.md` — capability-based workflow guides with involved
-  domains, modules, and onboarding significance
-- `first_week_story.md` — a five-day learning sequence grounded in discovered
-  business priorities
-- `repository_story.md` — repository-specific business flow, domain evidence,
-  detected patterns, and prioritized customizations
-- `business_risk_story.md` — inferred areas of business sensitivity for
-  onboarding, not an operational risk assessment
-- `first_day_briefing.md` — concise first-day overview and recommended learning
-  sequence
-- `system_overview.mmd` — high-level component relationship diagram
-- `execution_flow.mmd` — inferred application execution sequence
-- `subsystem_map.mmd` — components grouped by architectural boundary
-- `knowledge_hub.json` — structured aggregate used to generate the hub
-- `knowledge_hub.html` — primary, offline onboarding experience
-- `dashboard.html` — standalone onboarding dashboard with embedded diagram
-  source, rendered Mermaid diagrams, and learning-path content
-- `manifest.json` — artifacts registered through the harness API
-
-The dashboard loads a pinned Mermaid.js release from jsDelivr to render the
-diagrams. The HTML and Mermaid source are embedded in the artifact; if the CDN
-is unavailable, users can still view or copy the Mermaid source.
-Execution-flow diagrams depict a likely conceptual path through relationships,
-not observed runtime events; imports and references are not proof of calls.
-When Magento lacks execution-specific evidence but has component relationships,
-the execution-flow artifact instead shows a labeled association path. Its edges
-may come from different modules and do not establish execution order or calls.
-External services and data stores are inferred from runtime dependencies,
-top-level imports, and recognized runtime configuration, not documentation
-mentions or development/optional dependencies. Profile-gated Compose services
-and disabled YAML sections, as well as example, local, or development
-configuration, are excluded. These signals
-do not prove an integration is active in a deployment, and conservative
-filtering may miss integrations. Architecture evidence is sampled from at most 120
-model-listed files, up to 24 KB per file and 400 KB total. Root README and
-configuration, entry points, selected public APIs, and documentation are
-prioritized; remaining files are interleaved by directory. Sampling and lexical
-matching are incomplete and do not resolve a call graph.
+The entry point also supports `python -m skills.onboarding_skill`. The optional
+`--module-graph` argument accepts a detected repository-relative area listed in
+`architecture_map.json` or the dashboard and generates `module_graph.mmd`.
+An unknown area is reported as an error. Skill metadata is in
+[`skills/skill.yaml`](skills/skill.yaml); its entry point and capability paths
+are relative to that file.
 
 Run the tests with:
 
@@ -273,122 +229,225 @@ Run the tests with:
 pytest tests/ -v
 ```
 
-## Why the model is the foundation
+## Generated Artifacts
 
-The model should be a stable, tool-independent description of what the
-scanner can observe. It should not contain conclusions that belong to a
-particular consumer. For example, a future code analyzer can record that module A
-imports module B and that a test file references module A; onboarding can use
-those facts to suggest a reading order, while an architecture explorer can use
-them to show module dependencies.
+By default, the skill writes to `outputs/`:
 
-The current model already records repository metadata, manifest dependencies,
-file paths and roles, directories, and detected patterns. Future work can add
-versioning and deeper code-level records such as:
-
-| Record | Useful facts |
+| Artifact | Description |
 |---|---|
-| Repository snapshot | Root, metadata, detected languages |
-| File | Relative path, broad kind, language |
-| Manifest | Build system, normalized dependencies, scripts, runtime constraints |
-| Symbol | Qualified name, kind (module/class/function), file and line span |
-| Relationship | Source, relation type, target, evidence location, confidence |
+| `summary.md` | Technologies, structure, reading suggestions, and documented setup and CI commands |
+| `learning_path.md` | Suggested sequence for becoming productive |
+| `repository_map.json` | Serialized `RepositoryModel`, including metadata, dependencies, directories, files, and detected patterns |
+| `architecture_summary.md` | System narrative, responsibilities, conceptual flow, and recommended exploration order |
+| `architecture_map.json` | Components, subsystems, layers, relationships and evidence, scores, entry points, integrations, repository relevance, and grouped dependencies |
+| `business_domains.md` | Inferred responsibilities, value, impact, starting modules, learning guidance, and expandable evidence |
+| `business_capabilities.md` | Capabilities grouped by business workflow and inferred external ownership boundaries |
+| `onboarding_priorities.md` | Suggested one-week business-first learning order and areas to defer |
+| `domain_map.json` | Structured archetype, domains, capabilities, integrations, custom modules, priorities, and business-impact assessments |
+| `executive_summary.md` | Concise repository purpose, value areas, and initial focus |
+| `critical_modules.md` | Top ten modules with domain ownership, impact, and rationale; remaining modules are retained in the domain map |
+| `first_week_onboarding.md` | Five-day business-focused onboarding plan |
+| `business_insights.md` | Prioritized value areas, integration boundaries, and recommendations to confirm with maintainers |
+| `business_story.md` | Inferred purpose, business flow, primary domains, integrations, and initial focus |
+| `critical_workflows.md` | Capability-based workflow guides with domains, modules, and onboarding significance |
+| `first_week_story.md` | Five-day learning sequence grounded in discovered business priorities |
+| `repository_story.md` | Repository-specific business flow, domain evidence, patterns, and customizations |
+| `business_risk_story.md` | Inferred business sensitivity for onboarding, not an operational risk assessment |
+| `first_day_briefing.md` | First-day overview and recommended learning sequence |
+| `system_overview.mmd` | High-level component relationship diagram |
+| `execution_flow.mmd` | Inferred conceptual flow or a labeled association path |
+| `subsystem_map.mmd` | Components grouped by architectural boundary |
+| `module_graph.mmd` | Optional diagram scoped to the area selected by `--module-graph` |
+| `knowledge_hub.json` | Structured aggregate used to generate the hub |
+| `knowledge_hub.html` | Primary offline onboarding experience |
+| `dashboard.html` | Standalone dashboard with embedded Mermaid source, rendered diagrams, and learning-path content |
+| `manifest.json` | Artifacts registered through the harness API |
 
-Every derived fact should retain its provenance: which file and line support
-it, which detector produced it, and whether it is directly observed or
-inferred. A consumer should be able to distinguish “the manifest declares
-FastAPI” from “this route function is registered with FastAPI.” Unknown or
-unresolved relationships should remain unknown, rather than being presented
-as certain.
+For non-business archetypes, several business-named Markdown files contain
+repository-specific technical topics and learning guidance instead of
+commerce-focused findings.
 
-## What deeper architecture analysis requires
+## Knowledge Hub
 
-File names and manifests reveal the repository's broad shape, but not how code
-is organized internally. Deeper analysis needs at least:
+Open `knowledge_hub.html` from the output directory. It embeds the content of
+`knowledge_hub.json` and works from a local file without a server or network
+connection. Its SVG visualizations support zoom, drag-to-pan, fullscreen, and
+export. They summarize inferred architecture relationships, conceptual flow,
+and workflow/domain associations rather than executing Mermaid.
 
-1. **A complete, bounded file catalog.** Normalize relative paths, identify
-   generated/vendor/build outputs, respect ignore rules, and make scanning
-   deterministic. Large repositories need limits and incremental indexing.
-2. **Language-aware syntax extraction.** Parse source into modules and symbols
-   (functions, classes, methods, types, routes, and configuration declarations)
-   with source spans. For Python, the standard-library `ast` module is a
-   reasonable first adapter. Other languages need their own parser, compiler,
-   or language-server integration; file extensions alone are not enough.
-3. **Relationship resolution.** The current analyzer makes a bounded lexical
-   first pass over imports/re-exports, type/class references, registrations,
-   configuration, and explicit documentation statements. Deeper edges such as
-   `calls`, `tests`, and fully resolved dependency injection still require
-   syntax extraction and resolution of aliases, conditional imports, and
-   runtime configuration.
-4. **An explicit confidence model.** An import can often be observed directly;
-   a call target may be ambiguous; a runtime plugin target may be unknowable
-   statically. Preserve those differences instead of flattening all edges into
-   a single “architecture” claim.
-5. **Evidence and validation.** Store paths and line ranges for findings, then
-   test the extracted facts against small fixture repositories and real
-   projects. Keep fixtures for edge cases such as import cycles, aliases,
-   generated files, monorepos, and unsupported syntax.
+The separate dashboard loads a pinned Mermaid.js release from jsDelivr to
+render its diagrams. Its HTML and Mermaid source are embedded; if the CDN is
+unavailable, users can still view or copy the source. System overview and
+subsystem diagrams use at most 15 nodes, aggregating large models and showing
+an "Other" count when areas do not fit. The full area list is available in the
+architecture map and dashboard.
 
-Static analysis will still have limits: reflection, dynamic imports,
-dependency injection, generated code, and runtime configuration can hide
-relationships. When static evidence is insufficient, an optional, explicitly
-enabled runtime trace or language-server index could add evidence. Repository
-scanning should remain read-only by default and must not run arbitrary project
-code to “discover” behavior.
+### API Inventory
 
-## How future capabilities can reuse it
+The inventory discovers operations in OpenAPI 3.x and Swagger 2.0 documents
+(JSON or YAML) and project-owned Magento route declarations. The hub displays
+findings or discovery warnings when either is present, and
+`knowledge_hub.json` contains the same inventory. Declarations are grouped by
+path in case-insensitive alphabetical order with expandable methods; duplicate
+declarations remain separate with their sources. The inventory can be
+generated from a local clone without a running environment.
 
-| Capability | Inventory and relationship facts it can consume |
-|---|---|
-| **Repository onboarding** | Setup docs, manifests, entry points, module/import relationships, tests, and CI commands to suggest a supported first-reading path |
-| **Architecture explorer** | Modules, symbols, imports, calls, inheritance, registration, and configuration relationships, with paths and evidence |
-| **Security review** | Dependency declarations, configuration and secret-handling locations, and source-to-sink relationships; a dedicated ruleset must interpret these facts and report evidence rather than treating inventory as a security verdict |
-| **Documentation generator** | Public symbols, docstrings/comments, module structure, examples, and existing documentation to draft and cross-link reference material |
-| **Modernization advisor** | Runtime constraints, dependency versions, build/test configuration, deprecated APIs, and migration rules to identify evidence-backed update opportunities |
+OpenAPI and Swagger operations include the document version, source, and
+available operation ID and summary. Their direction is **unknown**: a document
+alone does not establish whether the project exposes or consumes an API, or
+whether it is used or deployed. Local path-item references within a document
+are followed; unresolved, cyclic, conflicting, and external path references
+are reported. External references are not fetched. Discovery is limited to
+JSON and YAML files, with a 10 MB limit per candidate specification; malformed
+or oversized candidates are reported. The inventory does not yet extract
+specification parameters, schemas, callbacks, webhooks, or outbound calls.
 
-The shared scanner should provide facts and relationships. Capability-specific
-logic should decide what those facts mean, what recommendations to make, and
-how to render them. This separation lets the scanner improve without turning
-the inventory into five unrelated sets of heuristics.
+For Magento, the inventory reads project-owned `webapi.xml` routes, preserving
+duplicate declarations and overrides with their service and access resources.
+Malformed route files are reported. PHP contract extraction is best-effort, and
+configured parameter values are intentionally omitted.
 
-## Suggested implementation sequence
+Paths are source declarations, not complete URLs: base URLs, REST or store
+prefixes, deployed code, module enablement, and overrides can vary by
+environment. Routes may be called by storefront code or external clients, and
+implementations may use local data or external services. Magento extraction is
+not a complete OpenAPI specification: vendor and platform routes, outbound
+calls, inherited contracts, resolved dependency injection, runtime module
+activation, request/response schemas, and endpoint criticality are not
+determined. Confirm effective routes and checkout dependencies with maintainers
+or the running deployment.
 
-1. **Harden the inventory contract.** Add a schema version and stable file
-   records; keep path handling, ignore behavior, and manifest extraction
-   deterministic and well tested.
-2. **Add one language adapter.** Start with Python and extract modules,
-   classes, functions, definitions, imports, and source spans. Build a small
-   import graph and preserve unresolved imports explicitly.
-3. **Use those facts in onboarding.** Recommend entry modules and tests based
-   on observed imports and test references, while showing the evidence behind
-   each suggestion.
-4. **Add relationship types incrementally.** Calls, inheritance, registration,
-   and configuration links each need separate resolution rules and tests.
-   Avoid claiming a complete call graph where static resolution is ambiguous.
-5. **Add other language adapters behind a shared interface.** Expand language
-   coverage only when each adapter can provide comparable entities,
-   relationships, provenance, and known limitations.
-6. **Build capability-specific consumers.** Architecture, security,
-   documentation, and modernization should query the same versioned facts and
-   add their own rules, evidence requirements, and output formats.
+## Current Limitations
 
-This sequence keeps the first useful capability small while creating a path
-for deeper analysis. It also avoids making an early parser choice or one
-capability's assumptions part of the permanent inventory contract.
+- **Evidence is bounded and lexical.** The architecture analyzer does not
+  build an AST or resolve calls. It uses best-effort lexical checks for
+  imports/re-exports, type and class references, registrations,
+  documentation, and configuration, combined with framework and layout
+  conventions. Import edges require a unique match to a model-listed local
+  source file; unresolved imports are omitted. Configuration registration
+  discovery recognizes provider/binding/registration sections in YAML, not
+  full dependency-injection resolution.
+- **Sampling is incomplete.** Relationship evidence is sampled from at most
+  120 model-listed files, up to 24 KB per file and 400 KB total. Root README
+  and configuration, entry points, selected public APIs, and documentation
+  are prioritized; remaining files are interleaved by directory. Generated
+  Magento static and preprocessed assets are excluded from architectural
+  inference. Lockfiles do not prove packages are installed, and missing
+  lockfiles limit dependency visibility because vendor manifests are not
+  traversed.
+- **Scores and boundaries are heuristic.** Confidence values are not
+  calibrated probabilities, and business impacts are not measured revenue.
+  Architectural layers, ownership, module roles, domains, capabilities, and
+  integrations are suggestions, not authoritative runtime or business
+  boundaries. Conservative archetype filtering may omit business concepts in
+  mixed-purpose repositories. Confirm priorities, integration criticality,
+  runtime activation, and ownership with maintainers.
+- **Flows are not runtime traces.** Diagram paths and narrative links are
+  onboarding hypotheses, not observed call order or operational risk.
+  Imports and references do not prove calls. For Magento, imports and type
+  references alone do not establish an execution sequence; when execution
+  evidence is absent, the execution-flow artifact may show a labeled
+  association path whose edges may come from different modules.
+- **Integration signals are not deployment verification.** Documentation
+  mentions and development/optional dependencies do not establish runtime
+  integrations. Profile-gated Compose services, disabled YAML sections, and
+  example, local, or development configuration are excluded; conservative
+  filtering may miss integrations. Optional dependencies and runtime signals
+  do not prove a service is active.
+- **Commands are evidence, not execution instructions.** Documented commands
+  are surfaced but not executed. Build and test suggestions inferred from
+  manifests are heuristics; prefer commands declared by the project or CI
+  when they disagree.
 
-## Project layout
+Repository inspection is read-only and does not execute arbitrary project code.
+Generating artifacts writes to the selected output directory.
+
+## AST Analysis Roadmap
+
+AST-based analysis is the next major architectural milestone. It is planned,
+not implemented: the existing architecture and PHP contract extraction use
+the methods described above.
+
+### Why AST Matters
+
+Language-aware syntax extraction can identify symbols and source spans more
+reliably than lexical matching, improve relationship discovery and
+architecture understanding, and provide reusable facts for future
+capabilities. It will complement the existing inventory and evidence-driven
+analysis rather than make inferred behavior automatically certain.
+
+### Planned Capabilities
+
+Language adapters can extract modules, classes, functions, interfaces, methods,
+imports, exports, routes, and configuration declarations where the language
+and parser support them. Python's standard-library `ast` module is a
+reasonable first adapter; other languages need appropriate parsers, compilers,
+or language-server integrations. Planned records include qualified names,
+kinds, file locations, and source spans.
+
+### Planned Relationship Types
+
+Planned relationships include imports, inheritance, interface implementation,
+registrations, calls, and test references. Resolution must handle aliases,
+conditional imports, and language-specific conventions; extracting syntax
+alone does not resolve every target. Future facts should retain their source
+and detector, distinguish observation from inference, and represent unresolved
+targets explicitly rather than inventing edges.
+
+Validation should use small fixture repositories and real projects, including
+import cycles, aliases, generated files, monorepos, and unsupported syntax.
+File cataloging, ignore behavior, bounded analysis, deterministic output,
+incremental indexing, and model versioning remain important as the knowledge
+model grows.
+
+### Expected Limitations
+
+Even with ASTs, reflection, dynamic imports, dependency injection, generated
+code, and runtime configuration can hide relationships. Optional, explicitly
+enabled runtime tracing or language-server indexes may eventually add
+evidence; they should not replace the default read-only behavior or be
+presented as currently available.
+
+## Future Enhancements
+
+### AST Language Adapters
+
+Introduce language-aware adapters for Python, PHP, JavaScript, and TypeScript,
+with comparable entities, provenance, and documented language-specific
+limitations.
+
+### Relationship Resolution
+
+Improve call graph resolution, dependency-injection analysis, and
+configuration linkage incrementally, preserving ambiguity and evidence rather
+than claiming a complete graph. Add evidence-based discovery of outbound API
+calls and additional API declaration sources as language adapters mature.
+
+### Additional Repository Intelligence
+
+Build consumers of shared facts for architecture exploration, security review
+support, documentation generation, and modernization guidance. Each consumer
+needs its own rules and evidence requirements: dependency and configuration
+facts alone are not a security verdict, for example.
+
+### Advanced Knowledge Hub Features
+
+Expand dashboard and hub exploration as richer symbol and relationship
+evidence becomes available, including navigation and drill-down into those
+facts and their provenance.
+
+## Project Layout
 
 ```text
 repo-onboarding-assistant/
-├── skills/                  # Skill instructions, metadata, and CLI entry point
-├── analyzers/               # Scanning, analysis, domain and business logic
-├── models/                  # Repository and architecture data models
-├── artifacts/               # Dashboard and visualization renderers
+├── skills/                  # Skill instructions, metadata, CLI, and artifact registration
+├── analyzers/               # Inventory, architecture, domain, and business analysis
+├── models/                  # Repository, architecture, domain, and business models
+├── artifacts/               # Report, dashboard, Knowledge Hub, and diagram renderers
 ├── templates/               # Reference output templates
 ├── outputs/                 # Default generated artifacts
 └── tests/                   # Scanner, analyzer, and end-to-end tests
 ```
 
-`skills/SKILL.md` describes how the skill is invoked by its host. This README describes
-the project, the current scanner boundary, and the planned evolution of the
-shared inventory.
+[`skills/SKILL.md`](skills/SKILL.md) describes how the skill is invoked by its
+host.

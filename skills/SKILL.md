@@ -3,7 +3,8 @@
 Analyze an unfamiliar source code repository and generate onboarding artifacts
 that help a new developer get oriented quickly.
 
-Built on top of the [LLM Harness Lite](https://github.com/abadiape/llm-harness-lite)
+Built on top of [LLM Harness Lite](https://github.com/abadiape/llm-harness-lite)
+0.2.0 or later and its
 Artifact API (`Artifact`, `ArtifactRegistry`, `ArtifactType`, `SkillResult`).
 The skill itself is independent from the harness — no harness changes required.
 
@@ -77,10 +78,10 @@ indicate declared or locked packages, not necessarily installed packages.
 ## Usage
 
 ```bash
-pip install llm-harness-lite pytest
+pip install -r requirements.txt
 python skills/onboarding_skill.py /path/to/repository
 python skills/onboarding_skill.py /path/to/repository --output-dir ./my-output
-python skills/onboarding_skill.py /path/to/repository --module-graph app/code/Company/Module
+python skills/onboarding_skill.py /path/to/repository --module-graph packages/my-package
 ```
 
 Run these commands from the repository root. The module form
@@ -95,6 +96,10 @@ and opens offline without a server. It includes business and architecture
 views, module priorities, a five-day plan, artifact links, and interactive SVG
 maps of inferred relationships and workflow associations. These maps are not
 runtime traces; confirm findings and priorities with maintainers.
+The API Inventory lists operations from local OpenAPI 3.x and Swagger 2.0
+JSON/YAML documents and supported Magento route declarations. Specification
+direction is unknown, external references are not fetched, and outbound calls
+are not yet inventoried.
 
 Output (`outputs/` by default):
 
