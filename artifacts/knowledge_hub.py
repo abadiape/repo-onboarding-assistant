@@ -13,6 +13,8 @@ from analyzers.domain_discovery import DomainDiscovery
 from analyzers.narrative_generation import BusinessNarrative
 from models.architecture_model import ArchitectureModel
 from models.models import RepositoryModel
+from models.repository_archetype import ArchetypeResult, RepositoryArchetype
+from analyzers.technical_onboarding import repository_purpose, technical_topics
 
 
 def build_knowledge_hub(
@@ -22,11 +24,13 @@ def build_knowledge_hub(
     insights: BusinessInsights,
     narrative: BusinessNarrative,
     artifact_names: list[str],
+    archetype: ArchetypeResult | None = None,
 ) -> dict[str, Any]:
     """Aggregate analyzer results without reading generated Markdown."""
     components = {item.id: item.name for item in architecture.components}
     relationships = [
-        {"source": components[item.source], "target": components[item.target], "label": item.type}
+        {"source": components[item.source], "target": components[item.target], "label": item.type,
+         **({"evidence": item.evidence} if item.evidence else {})}
         for item in architecture.relationships
         if item.source in components and item.target in components
     ]
@@ -34,10 +38,13 @@ def build_knowledge_hub(
     for flow in architecture.execution_flows:
         for path in flow.get("paths", []):
             ids = path["component_ids"]
-            for source, target, label in zip(ids, ids[1:], path["relationship_types"]):
+            evidence = path.get("relationship_evidence", [])
+            for index, (source, target, label) in enumerate(zip(ids, ids[1:], path["relationship_types"])):
                 if source in components and target in components:
                     flow_edges.append({
-                        "source": components[source], "target": components[target], "label": label,
+                        "source": components[source], "target": components[target],
+                        "label": label + (" (optional)" if path.get("kind") == "optional" else ""),
+                        **({"evidence": evidence[index]} if index < len(evidence) and evidence[index] else {}),
                     })
     actionable = [
         item for item in insights.domain_impacts
@@ -47,14 +54,40 @@ def build_knowledge_hub(
         item for item in insights.domain_impacts if item.onboarding_importance == "Medium"
     ]
     purpose = narrative.system_purpose
-    if not narrative.primary_domains and architecture.description.strip():
+    if archetype is None and not narrative.primary_domains and architecture.description.strip():
         purpose = architecture.description.strip()
+    elif archetype and archetype.archetype == RepositoryArchetype.BUSINESS_APPLICATION and not narrative.primary_domains:
+        purpose = repository_purpose(model, purpose)
     workflow_edges = [
         {"source": workflow.name, "target": domain, "label": "associated with"}
         for workflow in narrative.workflows for domain in workflow.domains
     ]
+    technical = archetype is not None and archetype.archetype != RepositoryArchetype.BUSINESS_APPLICATION
+    topics = technical_topics(model, archetype.archetype) if technical and archetype else []
+    observations = []
+    for domain in domains.domains:
+        paths = [module.path for module in domains.custom_modules if module.name in domain.modules]
+        if paths:
+            observations.append(f"{domain.name}: matched module paths include {', '.join(paths[:3])}.")
+        if len(observations) == 5:
+            break
+    if architecture.entry_points:
+        observations.append("Potential entry points: " + ", ".join(architecture.entry_points[:3]) + ".")
+    if architecture.external_dependencies or architecture.data_stores:
+        observations.append(
+            "Detected external technology signals: "
+            + ", ".join((architecture.external_dependencies + architecture.data_stores)[:6])
+            + ". Confirm runtime configuration."
+        )
+    if architecture.relationships and not architecture.execution_flows:
+        observations.append(
+            "The available relationships do not establish an execution sequence; "
+            "inspect their evidence in the visualizations."
+        )
     return {
         "schema_version": 1,
+        **({"repository_archetype": archetype.to_dict()} if archetype else {}),
+        "technical_topics": [asdict(item) for item in topics],
         "overview": {
             "repository_name": model.repository_name,
             "purpose": purpose,
@@ -76,6 +109,7 @@ def build_knowledge_hub(
             "layers": [asdict(item) for item in architecture.layers],
             "components": [asdict(item) for item in architecture.components],
             "execution_flows": architecture.execution_flows,
+            "observations": observations,
         },
         "learning_path": first_week_onboarding_plan(insights),
         "workflows": [asdict(item) for item in narrative.workflows],
@@ -101,7 +135,10 @@ def _list(values: list[str], empty: str, *, ordered: bool = False) -> str:
     return f"<{tag}>" + "".join(f"<li>{_e(value)}</li>" for value in values) + f"</{tag}>"
 
 
-def _diagram(visualization: dict[str, Any], index: int) -> str:
+def _diagram(
+    visualization: dict[str, Any], index: int,
+    component_details: dict[str, dict[str, Any]] | None = None,
+) -> str:
     edges = visualization["edges"]
     if not edges:
         return f'<article class="card"><h3>{_e(visualization["title"])}</h3><p class="empty">No relationships were inferred.</p></article>'
@@ -120,6 +157,31 @@ def _diagram(visualization: dict[str, Any], index: int) -> str:
         )
     omitted = visualization["omitted"]
     note = f'{omitted} additional associations are omitted from this visualization.' if omitted else ""
+    names = list(dict.fromkeys(
+        name for edge in edges for name in (edge["source"], edge["target"])
+    ))
+    descriptions = []
+    for name in names:
+        component = (component_details or {}).get(name)
+        if not component:
+            continue
+        locations = component.get("locations", [])[:2]
+        descriptions.append(
+            f'<li><strong>{_e(name)}:</strong> {_e(component["description"])}'
+            + (f' <span>Example locations: {_e(", ".join(locations))}.</span>' if locations else "")
+            + '</li>'
+        )
+    evidence_rows = [
+        f'<li>{_e(edge["source"])} → {_e(edge["target"])} ({_e(edge["label"])}): '
+        f'{_e("; ".join(edge["evidence"][:2]))}</li>'
+        for edge in edges if edge.get("evidence")
+    ]
+    legend = (
+        f'<details class="diagram-legend"{" open" if index == 10 else ""}><summary>Component meanings and evidence</summary>'
+        + ('<ul>' + "".join(descriptions) + '</ul>' if descriptions else "")
+        + ('<p>Relationship evidence:</p><ul>' + "".join(evidence_rows) + '</ul>' if evidence_rows else "")
+        + '</details>'
+    ) if descriptions or evidence_rows else ""
     return (
         f'<article class="card diagram-card"><h3>{_e(visualization["title"])}</h3>'
         f'<p>Inferred relationships, not observed runtime calls. {_e(note)}</p>'
@@ -136,7 +198,7 @@ def _diagram(visualization: dict[str, Any], index: int) -> str:
         '<path d="M0 0 L8 4 L0 8 Z" fill="#466a8b" stroke="none"/></marker></defs>'
         '<style>rect{fill:#eff6fc;stroke:#9bbbd4} path{fill:none;stroke:#466a8b;stroke-width:2} marker path{fill:#466a8b;stroke:none} '
         'foreignObject div{font:14px/1.2 sans-serif;color:#173b59;text-align:center;overflow-wrap:anywhere}</style>'
-        + "".join(rows) + '</svg></div></article>'
+        + "".join(rows) + '</svg></div>' + legend + '</article>'
     )
 
 
@@ -168,12 +230,15 @@ def render_knowledge_hub_html(hub: dict[str, Any]) -> str:
         for index, item in enumerate(modules, 1)
     ) or '<p class="empty">No custom modules were identified.</p>'
     architecture = hub["architecture"]
+    component_details = {item["name"]: item for item in architecture["components"]}
     layers = "".join(
         f'<article class="card"><h3>{_e(item["name"])}</h3><p>{_e(item["description"])}</p></article>'
         for item in architecture["layers"]
     ) or '<p class="empty">No architectural layers were inferred.</p>'
     components = "".join(
-        f'<article class="card"><h3>{_e(item["name"])}</h3><p>{_e(item["description"])}</p></article>'
+        f'<article class="card"><h3>{_e(item["name"])}</h3><p>{_e(item["description"])}</p>'
+        + (f'<p><strong>Example locations:</strong> {_e(", ".join(item.get("locations", [])[:2]))}</p>' if item.get("locations") else "")
+        + '</article>'
         for item in architecture["components"][:12]
     ) or '<p class="empty">No major components were inferred.</p>'
     if len(architecture["components"]) > 12:
@@ -192,16 +257,88 @@ def render_knowledge_hub_html(hub: dict[str, Any]) -> str:
         f'<li><a href="{quote(name, safe="")}">{_e(name)}</a></li>'
         for name in hub["artifacts"]
     )
-    diagrams = [_diagram(item, index) for index, item in enumerate(hub["visualizations"])]
+    technical = "repository_archetype" in hub and hub["repository_archetype"]["archetype"] != RepositoryArchetype.BUSINESS_APPLICATION.value
+    classification = hub.get("repository_archetype")
+    classification_card = ""
+    if classification:
+        name = classification["archetype"].replace("_", " ").title()
+        classification_card = (
+            f'<article class="card"><h3>Inferred archetype: {_e(name)}</h3>'
+            f'<p>Heuristic confidence: {_e(classification["confidence"])}</p>'
+            + (_list(classification["evidence"], "") if classification["evidence"] else "")
+            + '</article>'
+        )
+    if technical:
+        topics = hub.get("technical_topics", [])
+        focus_cards = "".join(
+            f'<article class="card"><h3>{_e(item["title"])}</h3>'
+            f'{_list(item["evidence"], "")}</article>'
+            for item in topics
+        )
+        overview_cards = (
+            f'<article class="card"><h3>Learning path</h3><p><strong>Start:</strong> {_e(days[0]["title"])}</p>'
+            '<a href="#week">See the learning plan</a></article>'
+        )
+        business_nav = ""
+        business_section = ""
+        overview_heading = "Repository Overview"
+        notice = "Classification and relationships are heuristic; confirm them with maintainers."
+        overview_extra = f'<div class="grid block">{classification_card}{focus_cards}</div>' if classification_card or focus_cards else ""
+    else:
+        overview_heading = "Executive Overview"
+        notice = "Inferred from repository evidence, not a runtime or business assessment. Confirm priorities and ownership with maintainers."
+        overview_cards = (
+            (f'<article class="card"><h3>Business focus</h3>{focus}</article>' if overview["business_focus"] else "")
+            + (f'<article class="card"><h3>Critical modules</h3>{top_modules}</article>' if modules else "")
+            + (f'<article class="card"><h3>Start here</h3>{starts}</article>' if overview["starting_areas"] else "")
+            + f'<article class="card"><h3>Learning path</h3><p><strong>First day:</strong> {_e(days[0]["title"])}</p>'
+            f'<p><strong>First week:</strong> {_e(days[1]["title"])} and the remaining plan.</p><a href="#week">See the five-day plan</a></article>'
+        )
+        overview_extra = (
+            f'<div class="grid block">{classification_card}{domain_cards if hub["business_domains"] else ""}</div>'
+        ) if classification_card or hub["business_domains"] else ""
+        if hub["workflows"]:
+            overview_extra += f'<div class="block"><h2>Workflows</h2><div class="grid">{workflows}</div></div>'
+        business_nav = '<a href="#business">Business</a>'
+        business_section = (
+            '<section id="business"><h2>Business View</h2><p class="notice">Domain matches and impacts are heuristic; confirm them with maintainers.</p>'
+            + (f'<div class="grid">{domain_cards}</div>' if hub["business_domains"] else "")
+            + (f'<div class="block"><h2>Workflows</h2><div class="grid">{workflows}</div></div>' if hub["workflows"] else "")
+            + '</section>'
+        ) if hub["business_domains"] or hub["workflows"] else ""
+        if not business_section:
+            business_nav = ""
+    modules_nav = '<a href="#modules">Critical Modules</a>' if modules else ""
+    modules_section = (
+        '<section id="modules"><h2>Critical Modules</h2><p class="notice">Select a module for its inferred role and onboarding recommendation. Up to ten are shown.</p>'
+        f'<div class="stack">{module_cards}</div></section>'
+    ) if modules else ""
+    flow_section = (
+        f'<div class="block"><h2>Execution Flow</h2><p class="notice">A conceptual path based on inferred relationships, not a runtime trace. Open the legend to inspect role definitions and evidence.</p>{_diagram(hub["visualizations"][1], 10, component_details)}</div>'
+    ) if hub["visualizations"][1]["edges"] else ""
+    layers_section = f'<div class="block"><h2>Architectural Layers</h2><div class="grid">{layers}</div></div>' if architecture["layers"] else ""
+    components_section = f'<div class="block"><h2>Major Components</h2><div class="grid">{components}</div></div>' if architecture["components"] else ""
+    diagrams = [_diagram(item, index, component_details) for index, item in enumerate(hub["visualizations"]) if item["edges"]]
+    visual_nav = '<a href="#visualizations">Visualizations</a>' if diagrams else ""
+    visual_section = '<section id="visualizations"><h2>Visualizations</h2><p class="notice">Offline SVG maps generated from structured findings. Associations are inferred.</p><div class="stack">' + "".join(diagrams) + '</div></section>' if diagrams else ""
     template = Template((Path(__file__).parent / "knowledge_hub_template.html").read_text(encoding="utf-8"))
     return template.substitute(
         title=_e(overview["repository_name"]), purpose=_e(overview["purpose"]),
-        focus=focus, starts=starts, top_modules=top_modules,
-        first_day=_e(days[0]["title"]), first_week=_e(days[1]["title"]),
-        defer=_e(overview["defer_guidance"]), deferred_paths=_list(overview["defer"][:8], "No specific paths identified."),
-        domains=domain_cards, modules=module_cards,
+        overview_heading=overview_heading, notice=notice, overview_cards=overview_cards,
+        overview_extra=overview_extra, business_nav=business_nav, business_section=business_section,
+        modules_nav=modules_nav, modules_section=modules_section, visual_nav=visual_nav, visual_section=visual_section,
+        defer_section=(
+            '<div class="card defer"><h3>Defer initially</h3>'
+            f'<p>{_e(overview["defer_guidance"])}</p><details><summary>Detected lower-priority paths</summary>'
+            f'{_list(overview["defer"][:8], "")}</details></div>'
+        ) if overview["defer"] else "",
         architecture_description=_e(architecture["description"] or "No architecture overview was inferred."),
+        architecture_observations=(
+            '<div class="block"><h2>Repository-specific evidence</h2>'
+            '<p class="notice">Path and name matches suggest investigation points, not verified responsibilities.</p>'
+            + _list(architecture.get("observations", []), "") + '</div>'
+        ) if architecture.get("observations") else "",
         technologies=_e(", ".join(architecture["languages"] + architecture["frameworks"]) or "Not detected"),
-        layers=layers, components=components, flow=_diagram(hub["visualizations"][1], 10),
-        week=week, workflows=workflows, diagrams="".join(diagrams), artifacts=artifacts,
+        layers_section=layers_section, components_section=components_section, flow_section=flow_section,
+        week=week, artifacts=artifacts,
     )

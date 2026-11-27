@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from analyzers.business_insights import BusinessInsights, DomainImpact
 from analyzers.domain_discovery import BusinessCapability, DomainDiscovery
 from models.architecture_model import ArchitectureModel
+from models.models import RepositoryModel
+from models.repository_archetype import ArchetypeResult, RepositoryArchetype
+from analyzers.technical_onboarding import repository_purpose
 
 
 _FLOW_ORDER = {
@@ -73,8 +76,24 @@ def generate_business_narrative(
     architecture: ArchitectureModel,
     domains: DomainDiscovery,
     insights: BusinessInsights,
+    archetype: ArchetypeResult | None = None,
+    model: RepositoryModel | None = None,
 ) -> BusinessNarrative:
     """Turn existing findings into a concise, evidence-grounded onboarding story."""
+    if archetype is not None and archetype.archetype != RepositoryArchetype.BUSINESS_APPLICATION:
+        if model is None:
+            raise ValueError("A repository model is required for technical narratives")
+        purpose = repository_purpose(model, f"Explore {model.repository_name} using its repository evidence.")
+        return BusinessNarrative(
+            system_name=architecture.system_name,
+            system_purpose=purpose,
+            differentiators=[
+                f"{item['title']}: {', '.join(str(path) for path in item['evidence'])}"
+                for item in insights.technical_topics
+            ],
+            recommendations=insights.recommendations,
+            first_week=[(f"Day {i}: {step['title']}", step["detail"]) for i, step in enumerate(insights.learning_plan, 1)],
+        )
     primary_domains = [
         domain for domain in insights.domain_impacts
         if domain.modules or domain.integrations

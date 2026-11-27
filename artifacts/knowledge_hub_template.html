@@ -43,40 +43,32 @@
 <body>
 <header><h1>$title</h1><p>Knowledge Hub · Repository onboarding</p></header>
 <nav aria-label="Knowledge Hub views">
-  <a href="#overview">Overview</a><a href="#business">Business</a><a href="#architecture">Architecture</a>
-  <a href="#modules">Critical Modules</a><a href="#week">First Week</a>
-  <a href="#visualizations">Visualizations</a><a href="#artifacts">Artifact Explorer</a>
+  <a href="#overview">Overview</a>$business_nav<a href="#architecture">Architecture</a>
+  $modules_nav<a href="#week">First Week</a>
+  $visual_nav<a href="#artifacts">Artifact Explorer</a>
 </nav>
 <main>
   <section id="overview">
-    <h2>Executive Overview</h2>
-    <p class="notice">Inferred from repository evidence, not a runtime or business assessment. Confirm priorities and ownership with maintainers.</p>
+    <h2>$overview_heading</h2>
+    <p class="notice">$notice</p>
     <div class="card overview-purpose"><h3>Repository purpose</h3><p>$purpose</p></div>
     <div class="grid overview-grid block">
-      <article class="card"><h3>Business focus</h3>$focus</article>
-      <article class="card"><h3>Critical modules</h3>$top_modules</article>
-      <article class="card"><h3>Start here</h3>$starts</article>
-      <article class="card"><h3>Learning path</h3><p><strong>First day:</strong> $first_day</p><p><strong>First week:</strong> $first_week and the remaining plan.</p><a href="#week">See the five-day plan</a></article>
+      $overview_cards
     </div>
-    <div class="card defer"><h3>Defer initially</h3><p>$defer</p><details><summary>Detected lower-priority paths</summary>$deferred_paths</details></div>
+    $overview_extra
+    $defer_section
   </section>
-  <section id="business">
-    <h2>Business View</h2><p class="notice">Domain matches and impacts are heuristic; confirm them with maintainers.</p>
-    <div class="grid">$domains</div>
-    <div class="block"><h2>Workflows</h2><div class="grid">$workflows</div></div>
-  </section>
+  $business_section
   <section id="architecture">
     <h2>Architecture View</h2><div class="card"><h3>Architecture overview</h3><p>$architecture_description</p><p><strong>Technologies:</strong> $technologies</p></div>
-    <div class="block"><h2>Execution Flow</h2><p class="notice">A conceptual path based on inferred relationships, not a runtime trace.</p>$flow</div>
-    <div class="block"><h2>Architectural Layers</h2><div class="grid">$layers</div></div>
-    <div class="block"><h2>Major Components</h2><div class="grid">$components</div></div>
+    $architecture_observations
+    $flow_section
+    $layers_section
+    $components_section
   </section>
-  <section id="modules">
-    <h2>Critical Modules</h2><p class="notice">Select a module for its inferred role and onboarding recommendation. Up to ten are shown.</p>
-    <div class="stack">$modules</div>
-  </section>
+  $modules_section
   <section id="week"><h2>First Week Onboarding</h2><p class="notice">Use this plan as a starting point and validate it with your team.</p><div class="grid">$week</div></section>
-  <section id="visualizations"><h2>Visualizations</h2><p class="notice">Offline SVG maps generated from structured findings. Associations are inferred.</p><div class="stack">$diagrams</div></section>
+  $visual_section
   <section id="artifacts"><h2>Artifact Explorer</h2><p>Open the individual generated artifacts for additional detail.</p><div class="card"><ul>$artifacts</ul></div></section>
 </main>
 <script>

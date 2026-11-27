@@ -24,6 +24,8 @@ _SUPPORTING = {"test", "tests", "docs", "examples", "example"}
 def classify_path(path: str) -> tuple[str, str]:
     """Return a relevance level and origin inferred from path conventions."""
     parts = [part.lower() for part in PurePosixPath(path.replace("\\", "/")).parts]
+    if parts[:2] in (["pub", "static"], ["var", "view_preprocessed"]):
+        return "ignored", "generated"
     if set(parts) & _IGNORED:
         return "ignored", "generated"
     if set(parts) & _VENDOR:

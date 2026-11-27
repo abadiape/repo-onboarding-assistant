@@ -61,6 +61,9 @@ from analyzers.onboarding_analyzer import (
     render_summary_markdown,
 )
 from analyzers.repository_scan import scan_repository
+from analyzers.repository_archetype import analyze_repository_archetype
+from analyzers.technical_onboarding import technical_markdown, technical_topics
+from models.repository_archetype import RepositoryArchetype
 
 try:
     from llm_harness_lite import Artifact, ArtifactRegistry, ArtifactType, SkillResult
@@ -123,9 +126,10 @@ def run_onboarding(
     out.mkdir(parents=True, exist_ok=True)
 
     model: RepositoryModel = scan_repository(repo_path)
+    archetype = analyze_repository_archetype(model)
     architecture = extract_architecture(model)
-    domains = analyze_domains(model, architecture)
-    business_insights = analyze_business_insights(architecture, domains)
+    domains = analyze_domains(model, architecture, archetype)
+    business_insights = analyze_business_insights(architecture, domains, archetype, model)
     insights = analyze_inventory(model, architecture)
     top_domain_names = [
         item.name for item in business_insights.domain_impacts
@@ -139,12 +143,20 @@ def run_onboarding(
         item.name for item in business_insights.capabilities
         if item.priority != "low"
     ][:5]
-    insights.learning_path = domain_learning_steps(
-        domains,
-        top_domain_names=top_domain_names,
-        top_module_names=top_module_names,
-        top_capability_names=top_capability_names,
-    ) + insights.learning_path
+    if archetype.archetype == RepositoryArchetype.BUSINESS_APPLICATION:
+        insights.learning_path = domain_learning_steps(
+            domains,
+            top_domain_names=top_domain_names,
+            top_module_names=top_module_names,
+            top_capability_names=top_capability_names,
+        ) + insights.learning_path
+    else:
+        insights.learning_path = [
+            {"step": 0, **step} for step in business_insights.learning_plan
+        ] + insights.learning_path
+        insights.summary = insights.summary.replace(
+            "Project-owned modules and business areas", "Project-owned areas"
+        )
     for step in insights.learning_path:
         if step["title"] == "Explore project-owned areas" and top_module_names:
             step["detail"] = (
@@ -169,13 +181,33 @@ def run_onboarding(
     critical_modules_md = render_critical_modules_markdown(business_insights)
     first_week_onboarding_md = render_first_week_onboarding_markdown(business_insights)
     business_insights_md = render_business_insights_markdown(business_insights)
-    narrative = generate_business_narrative(architecture, domains, business_insights)
+    narrative = generate_business_narrative(architecture, domains, business_insights, archetype, model)
     business_story_md = render_business_story_markdown(narrative)
     critical_workflows_md = render_critical_workflows_markdown(narrative)
     first_week_story_md = render_first_week_story_markdown(narrative)
     repository_story_md = render_repository_story_markdown(narrative)
     business_risk_story_md = render_business_risk_story_markdown(narrative)
     first_day_briefing_md = render_first_day_briefing_markdown(narrative)
+    if archetype.archetype != RepositoryArchetype.BUSINESS_APPLICATION:
+        topics = technical_topics(model, archetype.archetype)
+        plan = business_insights.learning_plan
+        purpose = narrative.system_purpose
+        def technical(title: str, *, selected_topics=topics, selected_plan=plan) -> str:
+            return technical_markdown(title, purpose, selected_topics, selected_plan)
+
+        business_domains_md = technical("Repository Concepts", selected_plan=[])
+        business_capabilities_md = technical("Repository Capabilities", selected_plan=[])
+        onboarding_priorities_md = technical("Onboarding Priorities", selected_topics=[])
+        executive_summary_md = technical("Repository Overview", selected_topics=topics[:3], selected_plan=plan[:2])
+        critical_modules_md = technical("Starting Points", selected_plan=[])
+        first_week_onboarding_md = technical("First-Week Onboarding", selected_topics=[])
+        business_insights_md = technical("Repository Insights", selected_plan=[])
+        business_story_md = technical("Repository Story")
+        critical_workflows_md = technical("Execution and Integration", selected_plan=[])
+        first_week_story_md = technical("First-Week Story", selected_topics=[])
+        repository_story_md = technical("Repository Story")
+        business_risk_story_md = technical("Change Considerations", selected_plan=[])
+        first_day_briefing_md = technical("First-Day Briefing", selected_topics=topics[:2], selected_plan=plan[:1])
     architecture_summary_md = render_architecture_summary_markdown(architecture)
     diagrams = {
         "system_overview.mmd": render_system_overview_mermaid(architecture),
@@ -235,6 +267,7 @@ def run_onboarding(
         json.dumps(
             {
                 "repository_name": model.repository_name,
+                "repository_archetype": archetype.to_dict(),
                 **domains.to_dict(),
                 "business_insights": business_insights.to_dict(),
             },
@@ -262,7 +295,7 @@ def run_onboarding(
         "first_day_briefing.md", *diagrams, "dashboard.html", "knowledge_hub.json",
         "manifest.json",
     ]
-    hub = build_knowledge_hub(model, architecture, domains, business_insights, narrative, artifact_names)
+    hub = build_knowledge_hub(model, architecture, domains, business_insights, narrative, artifact_names, archetype)
     knowledge_hub_path.write_text(
         json.dumps(hub, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
