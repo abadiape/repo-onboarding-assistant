@@ -1,11 +1,15 @@
 """Classify repository areas and aggregate dependency declarations."""
+# Explicit aliases preserve the original import paths.
+# ruff: noqa: PLC0414
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from pathlib import PurePosixPath
 
 from models.models import Dependency, RepositoryModel
-
+from models.repository_relevance import DependencyGroup as DependencyGroup
+from models.repository_relevance import RepositoryArea as RepositoryArea
+from models.repository_relevance import RepositoryRelevance as RepositoryRelevance
 
 _IGNORED = {
     ".git", ".hg", ".svn", "__pycache__", ".pytest_cache", ".venv", "venv",
@@ -37,28 +41,6 @@ def classify_path(path: str) -> tuple[str, str]:
     return "high", "application"
 
 
-@dataclass
-class RepositoryArea:
-    name: str
-    path: str
-    kind: str
-
-
-@dataclass
-class DependencyGroup:
-    name: str
-    packages: list[str] = field(default_factory=list)
-    origin: str = "dependency"
-
-
-@dataclass
-class RepositoryRelevance:
-    paths: dict[str, list[str]] = field(default_factory=dict)
-    origins: dict[str, list[str]] = field(default_factory=dict)
-    areas: list[RepositoryArea] = field(default_factory=list)
-    dependency_groups: list[DependencyGroup] = field(default_factory=list)
-
-
 def _areas(model: RepositoryModel) -> list[RepositoryArea]:
     directories = set(model.directories)
     workspace_roots = set()
@@ -83,9 +65,8 @@ def _areas(model: RepositoryModel) -> list[RepositoryArea]:
             areas[path] = RepositoryArea(parts[-1], path, "custom module")
         elif len(parts) == 5 and parts[:2] == ["app", "design"]:
             areas[path] = RepositoryArea(parts[-1], path, "theme")
-        elif len(parts) == 2 and parts[0] in {"packages", "apps", "services"}:
-            if path in workspace_roots:
-                areas[path] = RepositoryArea(parts[-1], path, "workspace module")
+        elif len(parts) == 2 and parts[0] in {"packages", "apps", "services"} and path in workspace_roots:
+            areas[path] = RepositoryArea(parts[-1], path, "workspace module")
     children: dict[str, set[str]] = {}
     for path in directories:
         parent, _, name = path.rpartition("/")

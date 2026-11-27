@@ -4,12 +4,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models.models import RepositoryInventory
 from analyzers.onboarding_analyzer import (
     analyze_inventory,
     render_learning_path_markdown,
     render_summary_markdown,
 )
+from models.models import RepositoryInventory
 
 
 def sample_inventory() -> RepositoryInventory:

@@ -70,6 +70,12 @@ analyzer. Implement the small `Analyzer` interface (`supports` and `analyze`),
 then add the analyzer to `DEFAULT_ANALYZERS`; callers can also pass a custom
 analyzer sequence to `scan_repository`. Analyzers enrich `RepositoryModel`;
 artifact renderers consume that model separately from scanning.
+Scanner helpers are grouped by file discovery, manifests, tooling, and
+onboarding evidence. Architecture discovery separates evidence collection,
+component and relationship inference, and model assembly from diagram and
+report rendering. Business models live in `models/`, while business report
+renderers live in `artifacts/`. Existing public analyzer import paths remain
+available for callers.
 `analyzers/architecture_analyzer.py` extracts a framework-aware `ArchitectureModel`
 from repository structure, patterns, public API exports, source references,
 and bounded README, documentation, and configuration evidence, then renders

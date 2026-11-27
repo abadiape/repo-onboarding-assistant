@@ -5,9 +5,10 @@ import json
 import re
 from pathlib import Path
 
-from models.models import RepositoryModel
-from models.repository_archetype import ArchetypeCandidate, ArchetypeResult, RepositoryArchetype as A
 from analyzers.repository_relevance import relevant_model
+from models.models import RepositoryModel
+from models.repository_archetype import ArchetypeCandidate, ArchetypeResult
+from models.repository_archetype import RepositoryArchetype as A
 
 
 def _sources(model: RepositoryModel) -> list[tuple[str, str]]:
@@ -64,11 +65,10 @@ def analyze_repository_archetype(model: RepositoryModel) -> ArchetypeResult:
     for source, text in _sources(model):
         for kind, pattern, weight in patterns:
             match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
-            if match:
-                # Multiple documents often repeat the same description.
-                if not any(pattern == entry[0] for entry in seen.setdefault(kind, [])):
-                    seen[kind].append((pattern, source))
-                    add(kind, weight, f"{source}: {match.group(0)[:120].strip()}")
+            # Multiple documents often repeat the same description.
+            if match and not any(pattern == entry[0] for entry in seen.setdefault(kind, [])):
+                seen[kind].append((pattern, source))
+                add(kind, weight, f"{source}: {match.group(0)[:120].strip()}")
     magento = next(
         (dependency for dependency in model.dependencies
          if dependency.name.casefold().startswith("magento/product-")),

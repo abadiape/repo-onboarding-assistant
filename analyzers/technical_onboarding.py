@@ -9,7 +9,6 @@ from analyzers.repository_relevance import classify_path, relevant_model
 from models.models import RepositoryModel
 from models.repository_archetype import RepositoryArchetype as A
 
-
 _TOPICS: dict[A, list[tuple[str, str]]] = {
     A.AI_AGENT_PLATFORM: [
         ("Core Concepts", r"agent|llm|model"),

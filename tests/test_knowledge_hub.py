@@ -3,11 +3,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from artifacts.knowledge_hub import build_knowledge_hub, render_knowledge_hub_html
 from analyzers.business_insights import BusinessInsights
 from analyzers.domain_discovery import DomainDiscovery
 from analyzers.narrative_generation import BusinessNarrative, NarrativeWorkflow
-from models.architecture_model import ArchitectureComponent, ArchitectureModel, ArchitectureRelationship
+from artifacts.knowledge_hub import build_knowledge_hub, render_knowledge_hub_html
+from models.architecture_model import (
+    ArchitectureComponent,
+    ArchitectureModel,
+    ArchitectureRelationship,
+)
 from models.models import RepositoryModel
 
 
