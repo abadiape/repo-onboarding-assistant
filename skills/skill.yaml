@@ -3,7 +3,7 @@ version: 0.1.0
 description: Scan a source repository, enrich its RepositoryModel with analyzers, and generate onboarding artifacts.
 entrypoint: onboarding_skill.py
 entry_function: run_onboarding
-harness: llm-harness-lite (>=0.1.0)
+harness: llm-harness-lite (>=0.2.0)
 inputs:
   - name: repository
     type: string

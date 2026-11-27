@@ -214,6 +214,18 @@ def render_knowledge_hub_html(hub: dict[str, Any]) -> str:
     api_nav = '<a href="#apis">API Inventory</a>' if endpoints or warnings else ""
 
     def api_card(item: dict[str, Any]) -> str:
+        if item.get("specification"):
+            return (
+                '<details class="card api-card"><summary>'
+                f'{_e(item["method"])} <span>{_e(item["specification"])}</span></summary>'
+                '<p><strong>Direction:</strong> Unknown; the specification alone does not '
+                'establish whether this project exposes or consumes the API.</p>'
+                + (f'<p><strong>Operation ID:</strong> {_e(item["operation_id"])}</p>'
+                   if item.get("operation_id") else "")
+                + (f'<p><strong>Summary:</strong> {_e(item["summary"])}</p>'
+                   if item.get("summary") else "")
+                + f'<p><strong>Evidence:</strong> {_e(item["source"])}</p></details>'
+            )
         return (
             '<details class="card api-card"><summary>'
             f'{_e(item["method"])} <span>{_e(item["module"])}</span></summary>'
@@ -244,18 +256,22 @@ def render_knowledge_hub_html(hub: dict[str, Any]) -> str:
     )
     api_section = (
         '<section id="apis"><h2>API Inventory</h2>'
-        '<p class="notice">This inventory lists project-owned Magento service routes declared in webapi.xml. '
-        'Storefront code or external clients may call them; their implementations may use local data or call '
-        'external services. Platform and vendor routes and outbound service calls are not inventoried.</p>'
-        '<p class="notice">The inventory can be generated from a local clone without access to a running environment. '
-        'Paths are source declarations, not complete URLs: base URLs and REST or store prefixes can vary by '
+        '<p class="notice">This inventory lists API declarations found in local specifications and supported '
+        'framework configuration. Specifications may describe APIs exposed or consumed by the project; '
+        'their direction and use cannot be inferred. Platform and vendor routes and outbound service calls '
+        'are not inventoried.</p>'
+        + ('<p class="notice">Magento service routes are project-owned webapi.xml declarations. '
+           'Storefront code or external clients may call them; their implementations may use local data or call '
+           'external services. Service parameters are not necessarily HTTP parameters.</p>'
+           if any(item.get("direction") == "incoming" for item in endpoints) else "")
+        + '<p class="notice">The inventory can be generated from a local clone without access to a running environment. '
+        'Paths are source declarations, not complete URLs: base URLs and deployment prefixes can vary by '
         'environment, as can deployed code, enabled modules and route overrides. Confirm effective URLs, access, '
-        'request and response behavior, and business criticality with maintainers when possible. '
-        'Service parameters are not necessarily HTTP parameters.</p>'
-        f'<p>{len(endpoints)} route declaration{"s" if len(endpoints) != 1 else ""} '
+        'request and response behavior, and business criticality with maintainers when possible.</p>'
+        f'<p>{len(endpoints)} API declaration{"s" if len(endpoints) != 1 else ""} '
         f'across {len(api_groups)} path{"s" if len(api_groups) != 1 else ""}</p>'
         + (_list(warnings, "") if warnings else "")
-        + ('<label for="api-search">Filter routes</label> <input id="api-search" type="search" placeholder="Method, path, module or service">'
+        + ('<label for="api-search">Filter declarations</label> <input id="api-search" type="search" placeholder="Method, path, source or operation">'
            '<p id="api-count" role="status"></p><div class="stack">' + api_cards + '</div>' if endpoints else "")
         + '</section>'
     ) if api_nav else ""

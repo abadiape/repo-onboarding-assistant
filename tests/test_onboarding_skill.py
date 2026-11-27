@@ -152,6 +152,65 @@ def test_magento_api_inventory_in_generated_hub(tmp_path):
     assert "secret-value" not in html
 
 
+def test_openapi_and_swagger_inventory_in_generated_hub(tmp_path):
+    repo = tmp_path / "service"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    (docs / "service-contract.yaml").write_text(
+        "openapi: 3.0.3\n"
+        "paths:\n"
+        "  /pets:\n"
+        "    get:\n"
+        "      operationId: listPets\n"
+        "      summary: '<script>unsafe</script>'\n"
+        "  /shared:\n"
+        "    $ref: '#/components/pathItems/Pets'\n"
+        "  /external:\n"
+        "    $ref: 'external.yaml#/paths/pets'\n"
+        "components:\n"
+        "  pathItems:\n"
+        "    Pets:\n"
+        "      post: {}\n",
+        encoding="utf-8",
+    )
+    (repo / "api.json").write_text(json.dumps({
+        "swagger": "2.0",
+        "paths": {"/legacy": {"get": {"operationId": "getLegacy"}}},
+    }), encoding="utf-8")
+    (repo / "unrelated.json").write_text(
+        '{"settings": {"openapi": "not a specification"}}', encoding="utf-8"
+    )
+    (repo / "openapi-broken.yaml").write_text("openapi: [\n", encoding="utf-8")
+    vendor = repo / "vendor"
+    vendor.mkdir()
+    (vendor / "openapi.json").write_text(json.dumps({
+        "openapi": "3.0.0", "paths": {"/vendor": {"get": {}}},
+    }), encoding="utf-8")
+
+    out = tmp_path / "output"
+    run_onboarding(repo, out)
+    hub = json.loads((out / "knowledge_hub.json").read_text())
+    inventory = hub["api_inventory"]
+    endpoints = inventory["endpoints"]
+    assert {(item["method"], item["path"], item["direction"]) for item in endpoints} == {
+        ("GET", "/pets", "unknown"),
+        ("POST", "/shared", "unknown"),
+        ("GET", "/legacy", "unknown"),
+    }
+    assert {item["source"] for item in endpoints} == {"api.json", "docs/service-contract.yaml"}
+    assert next(item for item in endpoints if item["path"] == "/legacy")["specification"] == "Swagger 2.0"
+    assert any("external path reference" in warning for warning in inventory["warnings"])
+    assert any("openapi-broken.yaml" in warning for warning in inventory["warnings"])
+    html = (out / "knowledge_hub.html").read_text()
+    assert 'href="#apis"' in html
+    assert "<strong>Direction:</strong> Unknown" in html
+    assert "<strong>Operation ID:</strong> listPets" in html
+    assert "&lt;script&gt;unsafe&lt;/script&gt;" in html
+    assert "<script>unsafe</script>" not in html
+    assert "outbound service calls are not inventoried" in html
+    assert "Magento service routes" not in html
+
+
 @pytest.mark.parametrize("module", [False, True])
 def test_cli_entrypoint_after_reorganization(tmp_path, module):
     root = Path(__file__).resolve().parent.parent

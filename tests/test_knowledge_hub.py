@@ -104,3 +104,19 @@ def test_api_routes_group_methods_without_dropping_duplicate_declarations():
     assert '<span class="api-path">/V1/zebra</span>' in groups[3]
     assert all(group.count('class="card api-card"') == 1 for group in groups[1:])
     assert "/V1/<item>" not in html
+
+
+def test_api_inventory_is_visible_for_warnings_without_endpoints():
+    model = RepositoryModel(
+        repository_name="example",
+        api_inventory={"endpoints": [], "warnings": ["Could not parse openapi.yaml."]},
+    )
+    hub = build_knowledge_hub(
+        model, ArchitectureModel(system_name="example", system_type="application", description=""),
+        DomainDiscovery(), BusinessInsights(),
+        BusinessNarrative(system_name="example", system_purpose="Example"), [],
+    )
+    html = render_knowledge_hub_html(hub)
+    assert 'href="#apis"' in html
+    assert "Could not parse openapi.yaml." in html
+    assert 'id="api-search"' not in html

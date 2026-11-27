@@ -1,9 +1,12 @@
-"""Collect project-owned Magento Web API declarations without executing the application."""
+"""Collect API declarations without executing the application."""
 from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from pathlib import Path
+
+from analyzers.openapi_inventory import collect_openapi_inventory
 
 
 def _contract(module: Path, service: str, method: str, root: Path) -> dict:
@@ -41,7 +44,9 @@ def _contract(module: Path, service: str, method: str, root: Path) -> dict:
     return result
 
 
-def collect_api_inventory(root: Path, files: list[Path]) -> dict:
+def collect_api_inventory(
+    root: Path, files: list[Path], *, spec_files: Iterable[Path] = ()
+) -> dict:
     """Return declarations and parse warnings; do not infer deployed routes."""
     endpoints: list[dict] = []
     warnings: list[str] = []
@@ -81,4 +86,7 @@ def collect_api_inventory(root: Path, files: list[Path]) -> dict:
                 "forced_parameters": [item.get("name", "") for item in route.findall("./data/parameter") if item.get("name")],
                 **contract,
             })
+    specifications = collect_openapi_inventory(root, spec_files)
+    endpoints.extend(specifications["endpoints"])
+    warnings.extend(specifications["warnings"])
     return {"endpoints": endpoints, "warnings": warnings}

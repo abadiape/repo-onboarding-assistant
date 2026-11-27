@@ -9,6 +9,70 @@ from analyzers.repository_scan import scan_repository
 from models.models import Dependency, RepositoryModel
 
 
+def test_openapi_size_limit_reports_skipped_candidate(tmp_path, monkeypatch):
+    from analyzers import openapi_inventory
+
+    (tmp_path / "openapi.json").write_text(
+        '{"openapi": "3.0.0", "paths": {"/items": {"get": {}}}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(openapi_inventory, "_MAX_SPEC_BYTES", 20)
+    inventory = scan_repository(tmp_path).api_inventory
+    assert inventory["endpoints"] == []
+    assert any("size limit" in warning and "openapi.json" in warning for warning in inventory["warnings"])
+
+
+def test_openapi_reports_ambiguous_references_and_rejects_unsafe_yaml(tmp_path):
+    (tmp_path / "openapi.yaml").write_text(
+        "openapi: 3.1.0\n"
+        "paths:\n"
+        "  /cycle:\n"
+        "    $ref: '#/components/pathItems/Cycle'\n"
+        "  /conflict:\n"
+        "    $ref: '#/components/pathItems/Shared'\n"
+        "    get: {}\n"
+        "  /valid:\n"
+        "    $ref: '#/components/pathItems/Shared'\n"
+        "components:\n"
+        "  pathItems:\n"
+        "    Cycle:\n"
+        "      $ref: '#/components/pathItems/Cycle'\n"
+        "    Shared:\n"
+        "      get: {}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "swagger-unsafe.yaml").write_text(
+        "swagger: '2.0'\npaths: !!python/object/apply:os.system ['echo unsafe']\n",
+        encoding="utf-8",
+    )
+    inventory = scan_repository(tmp_path).api_inventory
+    assert [(item["method"], item["path"]) for item in inventory["endpoints"]] == [
+        ("GET", "/valid")
+    ]
+    assert any("Unresolved or external path reference" in warning for warning in inventory["warnings"])
+    assert any("Conflicting path reference operations" in warning for warning in inventory["warnings"])
+    assert any("swagger-unsafe.yaml" in warning for warning in inventory["warnings"])
+
+
+def test_unrelated_json_containing_nested_spec_marker_is_not_an_api_warning(tmp_path):
+    (tmp_path / "data.json").write_text('[{"openapi": "example"}]', encoding="utf-8")
+    assert scan_repository(tmp_path).api_inventory == {"endpoints": [], "warnings": []}
+
+
+def test_openapi_does_not_read_specification_symlink_outside_repository(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text(
+        '{"openapi": "3.0.0", "paths": {"/outside": {"get": {}}}}',
+        encoding="utf-8",
+    )
+    (repo / "openapi.json").symlink_to(outside)
+    inventory = scan_repository(repo).api_inventory
+    assert inventory["endpoints"] == []
+    assert any("outside the repository" in warning for warning in inventory["warnings"])
+
+
 def make_python_repo(base: Path) -> Path:
     repo = base / "demo-python"
     (repo / "src").mkdir(parents=True)
