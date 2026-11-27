@@ -97,18 +97,16 @@ def test_run_onboarding_end_to_end(tmp_path):
     first_week = (out / "first_week_onboarding.md").read_text(encoding="utf-8")
     assert len(re.findall(r"^## Day \d:", first_week, re.MULTILINE)) == 5
     story = (out / "business_story.md").read_text(encoding="utf-8")
-    assert "## What This System Does" in story
-    assert "## Core Business Flow" in story
-    assert "## Primary Domains" in story
-    assert "## Critical Integrations" in story
-    assert "## What Matters Most" in story
+    assert "# Repository Story" in story
+    assert "## Learning sequence" in story
+    assert "business flow" not in story.lower()
     workflows = (out / "critical_workflows.md").read_text(encoding="utf-8")
-    assert "Onboarding significance" in workflows or "No actionable business capability" in workflows
+    assert "# Execution and Integration" in workflows
     first_week_story = (out / "first_week_story.md").read_text(encoding="utf-8")
     assert len(re.findall(r"^## Day \d:", first_week_story, re.MULTILINE)) == 5
     briefing = (out / "first_day_briefing.md").read_text(encoding="utf-8")
-    assert "## 1. What This Repository Appears to Do" in briefing
-    assert "## 5. Recommended Learning Sequence" in briefing
+    assert "# First-Day Briefing" in briefing
+    assert "## Learning sequence" in briefing
     assert len(briefing.split()) < 500
 
     repo_map = json.loads((out / "repository_map.json").read_text(encoding="utf-8"))

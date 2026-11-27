@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from models.architecture_model import ArchitectureModel
 from models.models import RepositoryModel
+from models.repository_archetype import ArchetypeResult, RepositoryArchetype
 from analyzers.repository_relevance import (
     RepositoryArea,
     analyze_relevance,
@@ -195,9 +196,16 @@ def _documentation_evidence(model: RepositoryModel) -> list[tuple[str, str]]:
 
 
 def analyze_domains(
-    model: RepositoryModel, architecture: ArchitectureModel | None = None
+    model: RepositoryModel, architecture: ArchitectureModel | None = None,
+    archetype: ArchetypeResult | None = None,
 ) -> DomainDiscovery:
     """Infer business-focused onboarding facts from model paths, docs, and integrations."""
+    if archetype is not None and archetype.archetype != RepositoryArchetype.BUSINESS_APPLICATION:
+        relevance = architecture.repository_relevance if architecture else analyze_relevance(model)
+        return DomainDiscovery(deferred_areas=sorted(
+            set(relevance.paths.get("low", [])) | set(relevance.paths.get("ignored", [])),
+            key=str.casefold,
+        ))
     model = relevant_model(model)
     relevance = architecture.repository_relevance if architecture else analyze_relevance(model)
     areas = relevance.areas

@@ -61,16 +61,44 @@ selected conceptual flow. The JSON retains the earlier relevance score.
 Significance is shown as High (at least 0.55), Medium (at least 0.20), or Low.
 All scores are heuristics rather than probabilities, and the number of files
 alone does not determine priority. The analyzer groups recognized roles into
-only the architectural layers supported by the detected components.
+only the architectural layers supported by the detected components, and
+describes their constituent roles and representative paths. These groupings
+are not proof of actual runtime boundaries. For Magento, model and provider
+names are treated as cross-module conventions, not a single domain layer or a
+specific integration role. Generated Magento static and preprocessed assets are
+excluded from architectural inference.
 Diagrams focus on the analyzed repository's components and inferred
 relationships, not the scanner pipeline or a dependency inventory.
-`analyzers/domain_discovery.py` consumes project-owned module boundaries, repository
+Diagram legends explain component names and include available relationship
+evidence. Magento imports and type references alone do not establish an
+execution sequence. Magento architecture overviews summarize the detected
+module and theme layout rather than treating an inherited README template as
+an authoritative description of the current deployment; other README descriptions
+remain attributed to the README.
+For other repositories, README and documentation evidence remains available
+to architecture inference. An explicitly documented retrieval-as-tool
+integration appears as an optional branch, not a mandatory agent step.
+When a Python package initializer re-exports local modules, the first-day
+plan identifies it as a public API starting point, not necessarily a runtime
+entry point.
+`analyzers/repository_archetype.py` classifies repository purpose before domain
+discovery using bounded README and manifest descriptions, repository names,
+declared Magento dependencies, and project layout. The selected archetype,
+heuristic confidence, evidence, and alternative candidates are recorded in
+`knowledge_hub.json` and `domain_map.json`. Scores are not probabilities and
+classifications can be wrong; review the evidence with a maintainer. An unknown
+classification remains unknown rather than assuming a business application.
+
+For inferred business applications, `analyzers/domain_discovery.py` consumes project-owned module boundaries, repository
 documentation, source paths, and Architecture Discovery's external dependency
 facts to infer business domains, capabilities, and integration boundaries.
 These are convention-based suggestions with supporting evidence, not
 authoritative ownership or business rules. Domain Discovery is separate from
 Architecture Discovery and puts business-focused steps first in the learning
-path.
+path. For all other archetypes, including unknown, commerce-specific domain
+inference is conservatively suppressed; this may omit real business concepts
+in mixed-purpose repositories. Technical reports and learning paths instead
+point to matching source and documentation evidence.
 `analyzers/business_insights.py` scores evidence confidence separately from estimated
 business impact (Critical, High, Medium, or Low) and onboarding importance, then
 ranks modules and plans a first week. Impact reflects workflow categories, not
@@ -87,7 +115,7 @@ Architecture Discovery integration evidence. Integration criticality and runtime
 activation must be confirmed with maintainers.
 `analyzers/narrative_generation.py` combines architecture, domain-discovery, and
 business-insight findings into repository-specific stories, workflow guides,
-and onboarding briefs. Narrative summaries prioritize matched custom modules,
+and onboarding briefs. Business narrative summaries prioritize matched custom modules,
 capabilities, and configured integrations; repository descriptions are fallback
 context rather than the primary explanation when direct business evidence exists.
 Module/domain links and inferred flows remain onboarding hypotheses, not observed
@@ -123,8 +151,8 @@ and capability paths are relative to that file.
 
 Open `knowledge_hub.html` in the output directory to start onboarding. It is
 generated from `knowledge_hub.json`, embeds its content, and works from a local
-file without a server or network connection. The hub presents business and
-architecture findings, ranked modules, a five-day plan, and an artifact
+file without a server or network connection. The hub presents archetype evidence,
+repository-specific technical topics or business findings, architecture, a five-day plan, and an artifact
 explorer. Its SVG visualizations support zoom, drag-to-pan, fullscreen, and
 export; they summarize inferred architecture relationships, conceptual flow,
 and workflow/domain associations rather than executing Mermaid or showing

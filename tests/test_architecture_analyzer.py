@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from analyzers.architecture_analyzer import (
+    _execution_flows,
     extract_architecture,
     render_architecture_map_json,
     render_architecture_summary_markdown,
@@ -97,6 +98,8 @@ def test_relevance_excludes_vendor_and_generated_from_inference():
     assert classify_path("infra/deploy.yaml") == ("medium", "infrastructure")
     assert classify_path("vendor/package/controllers") == ("low", "vendor")
     assert classify_path("src/generated/controllers") == ("ignored", "generated")
+    assert classify_path("pub/static/frontend/theme/js/app.js") == ("ignored", "generated")
+    assert classify_path("var/view_preprocessed/pub/static/a.js") == ("ignored", "generated")
     architecture = extract_architecture(RepositoryModel(
         repository_name="application",
         directories=["src/services", "vendor/package/controllers", "src/generated/controllers"],
@@ -105,6 +108,92 @@ def test_relevance_excludes_vendor_and_generated_from_inference():
     assert {component.name for component in architecture.components} == {"Services"}
     assert architecture.data_stores == []
     assert not any(path.startswith(("vendor/", "src/generated/")) for path in architecture.recommended_learning_path)
+
+
+def test_magento_architecture_uses_local_evidence_not_inherited_readme(tmp_path):
+    files = {
+        "README.md": "# Magento\n\nThis repository contains a sample Magento Commerce instance.\n",
+        "pub/index.php": "<?php\n",
+        "app/code/Shop/Orders/Model/Order.php": "<?php\nclass OrderModel {}\n",
+        "app/code/Shop/Orders/Model/ResourceModel/Order.php": "<?php\nclass OrderResourceModel {}\n",
+        "app/code/Shop/Orders/Ui/DataProvider/OrderProvider.php": "<?php\nclass OrderProvider {}\n",
+        "app/code/Shop/Orders/Controller/Index.php": "<?php\nclass IndexController {}\n",
+    }
+    for path, content in files.items():
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    model = RepositoryModel(
+        repository_name="shop", root_path=str(tmp_path), frameworks=["Magento"],
+        readme_summary="This repository contains a sample Magento Commerce instance.",
+        directories=[
+            "app/code/Shop/Orders", "app/code/Shop/Orders/Model",
+            "app/code/Shop/Orders/Model/ResourceModel", "app/code/Shop/Orders/Controller",
+            "app/code/Shop/Orders/Ui/DataProvider",
+            "app/code/Shop/Orders/Model/sample",
+        ],
+        files=[RepositoryFile(path, "readme" if path == "README.md" else "source") for path in files],
+        entry_points=["dev/tests/example/index.js"],
+    )
+    architecture = extract_architecture(model)
+    components = {component.name: component for component in architecture.components}
+
+    assert "sample Magento" not in architecture.description
+    assert "1 module directory under app/code" in architecture.description
+    assert "app/code/Shop/Orders" in architecture.description
+    assert "Models and Domain Code" in components
+    assert "Resource Models" in components
+    assert "Provider Classes" in components
+    assert "do not establish" in components["Models and Domain Code"].description
+    assert "configuration or UI data" in components["Provider Classes"].description
+    assert "pub/index.php" in architecture.entry_points
+    assert not any("tests/" in path for path in architecture.entry_points)
+    assert all(layer.description != "Inferred from component roles." for layer in architecture.layers)
+    assert not any(
+        "README.md:3" in evidence
+        for relation in architecture.relationships for evidence in relation.evidence
+    )
+
+
+def test_magento_imports_and_type_references_are_not_execution_flow():
+    components = [
+        ArchitectureComponent("a", "Observers", "extension", ""),
+        ArchitectureComponent("b", "Models", "domain", ""),
+        ArchitectureComponent("c", "Providers", "integration", ""),
+    ]
+    relationships = [
+        ArchitectureRelationship("a", "b", "imports", "", evidence=["app/code/A/One/a.php:1"]),
+        ArchitectureRelationship("b", "c", "references", "", evidence=["app/code/A/Two/b.php:2"]),
+    ]
+    assert not _execution_flows(components, relationships, [], [], [], require_execution_evidence=True)
+
+
+def test_magento_overview_preserves_specific_readme_description():
+    model = RepositoryModel(
+        repository_name="shop",
+        frameworks=["Magento"],
+        readme_summary="A Magento storefront integrating a regional fulfillment service.",
+        directories=["app/code/Shop/Fulfillment"],
+    )
+    architecture = extract_architecture(model)
+    assert "README description: A Magento storefront integrating a regional fulfillment service." in architecture.description
+    assert "app/code/Shop/Fulfillment" in architecture.description
+
+
+def test_document_relationships_do_not_match_unrelated_nested_directory_names(tmp_path):
+    (tmp_path / "README.md").write_text(
+        "# Example\n\nControllers contain a sample configuration.\n", encoding="utf-8"
+    )
+    model = RepositoryModel(
+        repository_name="example", root_path=str(tmp_path),
+        directories=["src/controllers", "src/models", "src/models/sample"],
+        files=[RepositoryFile("README.md", "readme")],
+    )
+    architecture = extract_architecture(model)
+    assert not any(
+        "README.md:3" in evidence
+        for relation in architecture.relationships for evidence in relation.evidence
+    )
 
 
 def test_module_graph_selects_relationships_within_the_requested_area():

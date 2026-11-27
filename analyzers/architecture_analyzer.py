@@ -13,7 +13,7 @@ from models.architecture_model import (
     ArchitectureSubsystem,
 )
 from models.models import RepositoryModel
-from analyzers.repository_relevance import analyze_relevance, relevant_model
+from analyzers.repository_relevance import RepositoryRelevance, analyze_relevance, relevant_model
 
 
 _CONCEPTS = {
@@ -23,10 +23,10 @@ _CONCEPTS = {
     "controller": ("Controllers", "application", "Application", "Coordinates requests and application work."),
     "services": ("Services", "application", "Application", "Implements application workflows and use cases."),
     "service": ("Services", "application", "Application", "Implements application workflows and use cases."),
-    "domain": ("Domain Layer", "domain", "Domain", "Contains core business rules and domain concepts."),
+    "domain": ("Domain Layer", "domain", "Domain", "Contains core rules and domain concepts."),
     "models": ("Domain Layer", "domain", "Domain", "Represents application entities and domain data."),
     "model": ("Domain Layer", "domain", "Domain", "Represents application entities and domain data."),
-    "entities": ("Domain Layer", "domain", "Domain", "Represents core business entities."),
+    "entities": ("Domain Layer", "domain", "Domain", "Represents core entities."),
     "repositories": ("Persistence Layer", "persistence", "Data and Infrastructure", "Provides access to persisted application data."),
     "repository": ("Persistence Layer", "persistence", "Data and Infrastructure", "Provides access to persisted application data."),
     "database": ("Persistence Layer", "persistence", "Data and Infrastructure", "Configures or accesses application data stores."),
@@ -389,7 +389,7 @@ def _system_type(model: RepositoryModel, text: str, entry_points: list[str]) -> 
 
 
 def _framework_key(model: RepositoryModel) -> str | None:
-    for key in ("laravel", "nestjs"):
+    for key in ("magento", "laravel", "nestjs"):
         if _framework(model, key):
             return key
     if _framework(model, "react") or _framework(model, "next"):
@@ -400,6 +400,32 @@ def _framework_key(model: RepositoryModel) -> str | None:
 def _concept_for(
     folder: str, framework: str | None, runtime_layout: bool
 ) -> tuple[str, str, str, str] | None:
+    if framework == "magento":
+        if folder in {"domain", "model", "models", "entities"}:
+            return (
+                "Models and Domain Code", "domain", "Domain",
+                "Groups paths named Model or Domain. These may contain business data or behavior; "
+                "the names alone do not establish a shared domain layer.",
+            )
+        if folder in {"resourcemodel", "resourcemodels"}:
+            return (
+                "Resource Models", "persistence", "Data and Infrastructure",
+                "Magento ResourceModel paths commonly contain persistence-related code; "
+                "check the individual implementation.",
+            )
+        if folder in {"provider", "providers"}:
+            return (
+                "Provider Classes", "integration", "Data and Infrastructure",
+                "Groups classes or paths named Provider, including possible configuration or UI data "
+                "providers. Their individual responsibilities must be checked.",
+            )
+        if folder in {
+            "api", "controller", "controllers", "service", "services",
+            "repository", "repositories", "observer", "observers",
+            "plugin", "plugins", "components", "pages",
+        }:
+            return _CONCEPTS.get(folder)
+        return None
     if framework == "react":
         return {
             "app": ("Pages", "presentation", "Presentation", "Defines page-level user experiences and navigation."),
@@ -470,7 +496,8 @@ def _concept_for_class(class_name: str, framework: str | None = None) -> tuple[s
         ("visualization", "visualization"),
     ):
         if normalized.endswith(suffix):
-            return _concept_for(concept, framework, False) or _CONCEPTS[concept]
+            matched = _concept_for(concept, framework, False)
+            return matched if framework == "magento" else matched or _CONCEPTS[concept]
     return None
 
 
@@ -495,7 +522,8 @@ def _concept_for_module(module_stem: str, framework: str | None = None) -> tuple
         "agent", "llm", "tools", "rag", "mcp",
     ):
         if token in tokens:
-            return _concept_for(token, framework, False) or _CONCEPTS.get(token)
+            matched = _concept_for(token, framework, False)
+            return matched if framework == "magento" else matched or _CONCEPTS.get(token)
     return None
 
 
@@ -528,12 +556,12 @@ def _discover_components(
         parts = _parts(directory)
         if not parts or set(parts) & _IGNORED_AREAS:
             continue
-        for part in parts:
+        for index, part in enumerate(parts):
             concept = _concept_for(part, framework, runtime_layout)
             if concept:
                 name, component_type, subsystem, description = concept
                 definitions[name] = (component_type, subsystem, description, part)
-                evidence.setdefault(name, set()).add(directory)
+                evidence.setdefault(name, set()).add("/".join(directory.split("/")[:index + 1]))
 
     directories = set(model.directories)
     children_by_parent: dict[str, set[str]] = {}
@@ -673,7 +701,9 @@ def _component_aliases(component: ArchitectureComponent) -> list[str]:
     for location in component.locations:
         path = Path(location)
         if not path.suffix:
-            candidates.append(location)
+            concept = _concept_for(path.name.lower(), None, False)
+            if concept and concept[0] == component.name:
+                candidates.append(location)
         else:
             concept = _concept_for_module(path.stem)
             if concept and concept[0] == component.name:
@@ -928,6 +958,17 @@ def _discover_relationships(
         ):
             continue
         for line_number, line in enumerate(content.splitlines(), 1):
+            if (
+                Path(path).suffix.lower() in _DOC_EXTENSIONS
+                and "Tools" in names and "Retrieval" in names
+                and re.search(r"\b(?:rag|retrieval)(?:\s+operation)?\s+as\s+(?:an?\s+)?(?:regular\s+)?tool\b", line, re.I)
+                and not re.search(r"\b(?:no|not|never|without)\b", line, re.I)
+            ):
+                _add_relationship(
+                    found, names["Tools"], names["Retrieval"], "can expose as a tool",
+                    0.82, f"{path}:{line_number} (documented optional retrieval tool)",
+                    "Documentation describes retrieval as a tool; its use is optional.",
+                )
             for sentence in re.split(r"(?<=[.!?;])\s+", line):
                 if not any(re.search(rf"\b{verb}\b", sentence, re.I) for verb in _RELATION_WORDS):
                     continue
@@ -995,11 +1036,14 @@ def _subsystems(components: list[ArchitectureComponent]) -> list[ArchitectureSub
         "Guards": "Application",
         "Interceptors": "Application",
         "Domain Layer": "Domain",
+        "Models and Domain Code": "Domain",
         "Models": "Domain",
         "Persistence Layer": "Data and Infrastructure",
+        "Resource Models": "Data and Infrastructure",
         "Infrastructure Layer": "Data and Infrastructure",
         "API Client Layer": "Data and Infrastructure",
         "Providers": "Data and Infrastructure",
+        "Provider Classes": "Data and Infrastructure",
         "Runtime": "Runtime and Extensions",
         "Registries": "Runtime and Extensions",
         "Plugins": "Runtime and Extensions",
@@ -1060,22 +1104,66 @@ def _layers(components: list[ArchitectureComponent]) -> list[ArchitectureSubsyst
         "entry_point": "Application Layer",
     }
     groups: dict[str, list[str]] = {}
+    by_id = {component.id: component for component in components}
     for component in components:
-        layer = layer_types.get(component.type)
+        layer = (
+            "Models and Domain Code" if component.name == "Models and Domain Code"
+            else layer_types.get(component.type)
+        )
         if layer:
             groups.setdefault(layer, []).append(component.id)
     return [
         ArchitectureSubsystem(
             id="layer_" + re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_"),
             name=name,
-            description="Inferred from component roles.",
+            description=" ".join(
+                f"{by_id[item].name}: {by_id[item].description}"
+                + (f" Example: {by_id[item].locations[0]}." if by_id[item].locations else "")
+                for item in ids
+            ),
             components=ids,
         )
         for name, ids in groups.items()
     ]
 
 
-def _system_description(model: RepositoryModel, files: dict[str, str]) -> str:
+def _system_description(
+    model: RepositoryModel, files: dict[str, str],
+    components: list[ArchitectureComponent], relevance: RepositoryRelevance,
+) -> str:
+    if _framework(model, "magento"):
+        areas = relevance.areas
+        modules = [area for area in areas if area.kind == "custom module"]
+        themes = [area for area in areas if area.kind == "theme"]
+        facts = ["Magento was detected from repository metadata."]
+        readme = model.readme_summary.strip()
+        if readme and not re.search(
+            r"\b(?:repository|project)\s+contains\s+(?:a|an)\s+(?:sample|example)\s+magento\b",
+            readme, re.IGNORECASE,
+        ):
+            facts.append(f"README description: {readme}")
+        if modules:
+            facts.append(
+                f"The scan found {len(modules)} module {'directory' if len(modules) == 1 else 'directories'} under app/code; "
+                "examples include " + ", ".join(area.path for area in modules[:3]) + "."
+            )
+        if themes:
+            facts.append(
+                f"The scan found {len(themes)} theme {'directory' if len(themes) == 1 else 'directories'} under app/design, including "
+                + ", ".join(area.path for area in themes[:2]) + "."
+            )
+        relevant_components = [
+            component for component in components
+            if component.name in {"Controllers", "Models and Domain Code", "Resource Models", "Plugins", "Observers", "Provider Classes"}
+        ]
+        if relevant_components:
+            facts.append(
+                "Detected path and class conventions include "
+                + ", ".join(component.name for component in relevant_components) + ". "
+                "These are cross-module groups, not verified runtime layers."
+            )
+        facts.append("The repository layout does not establish deployment status or production behavior.")
+        return " ".join(facts)
     readmes = [
         (path, text) for path, text in files.items()
         if Path(path).name.lower().startswith("readme")
@@ -1231,8 +1319,13 @@ def _significance_label(component: ArchitectureComponent) -> str:
 def _entry_points(
     model: RepositoryModel, source_text: str, files: dict[str, str] | None = None
 ) -> list[str]:
-    entries = list(model.entry_points)
-    known = {Path(file.path).as_posix() for file in model.files}
+    def usable(path: str) -> bool:
+        return not set(_parts(path)) & _IGNORED_AREAS
+
+    entries = [path for path in model.entry_points if usable(path)]
+    known = {Path(file.path).as_posix() for file in model.files if usable(file.path)}
+    if _framework(model, "magento"):
+        entries.extend(path for path in ("pub/index.php", "bin/magento", "index.php") if path in known and path not in entries)
     for path in sorted(known):
         if Path(path).name.lower() in {
             "main.py", "app.py", "server.py", "cli.py", "manage.py",
@@ -1349,6 +1442,8 @@ def _execution_flows(
     entry_points: list[str],
     external_dependencies: list[str],
     public_entries: list[str],
+    *,
+    require_execution_evidence: bool = False,
 ) -> list[dict]:
     if not relationships:
         return []
@@ -1363,6 +1458,12 @@ def _execution_flows(
     outgoing: dict[str, list[ArchitectureRelationship]] = {}
     incoming = set()
     for relation in relationships:
+        if relation.type == "can expose as a tool":
+            continue
+        if require_execution_evidence and relation.type not in {
+            "executes", "invokes", "dispatches to", "delegates to", "routes to",
+        }:
+            continue
         outgoing.setdefault(relation.source, []).append(relation)
         incoming.add(relation.target)
     roots = [
@@ -1439,14 +1540,28 @@ def _execution_flows(
         paths,
         key=path_score,
     )
+    flow_paths = [{
+        "component_ids": path,
+        "relationship_types": [relation.type for relation in path_relationships],
+        "relationship_confidences": [relation.confidence for relation in path_relationships],
+        "relationship_evidence": [relation.evidence for relation in path_relationships],
+    }]
+    for relation in relationships:
+        if (
+            relation.type == "can expose as a tool"
+            and relation.source in path
+            and relation.target not in path
+        ):
+            flow_paths.append({
+                "component_ids": [relation.source, relation.target],
+                "relationship_types": [relation.type],
+                "relationship_confidences": [relation.confidence],
+                "relationship_evidence": [relation.evidence],
+                "kind": "optional",
+            })
     return [{
         "name": "Likely conceptual flow",
-        "paths": [{
-            "component_ids": path,
-            "relationship_types": [relation.type for relation in path_relationships],
-            "relationship_confidences": [relation.confidence for relation in path_relationships],
-            "relationship_evidence": [relation.evidence for relation in path_relationships],
-        }],
+        "paths": flow_paths,
         "entry_points": entry_points,
         "external_dependencies": external_dependencies,
     }]
@@ -1469,13 +1584,30 @@ def extract_architecture(model: RepositoryModel) -> ArchitectureModel:
     _score_significance(components, relationships, [])
     external_dependencies, data_stores = _external_facts(model, relationship_sources)
     source_paths = {file.path for file in model.files if file.kind == "source"}
+    public_api_paths = [
+        path for path, content in relationship_sources.items()
+        if Path(path).name == "__init__.py"
+        and not set(_parts(path)) & _IGNORED_AREAS
+        and any(
+            _import_candidates(import_path, path, source_paths)
+            for _, import_path in _public_imports(path, content)
+        )
+    ]
+    if public_api_paths:
+        min_depth = min(len(Path(path).parts) for path in public_api_paths)
+        public_api_paths = sorted(
+            path for path in public_api_paths if len(Path(path).parts) == min_depth
+        )[:3]
     public_entries = [
         target.id for entry in entry_points
         for _, import_path in _public_imports(entry, relationship_sources.get(entry, ""))
         for target in [_target_component(import_path, entry, components, source_paths)]
         if target is not None
     ]
-    flow = _execution_flows(components, relationships, entry_points, external_dependencies, public_entries)
+    flow = _execution_flows(
+        components, relationships, entry_points, external_dependencies, public_entries,
+        require_execution_evidence=framework == "magento",
+    )
     _score_significance(components, relationships, flow)
     deployment = []
     file_names = {Path(file.path).name.lower() for file in model.files}
@@ -1490,7 +1622,7 @@ def extract_architecture(model: RepositoryModel) -> ArchitectureModel:
     return ArchitectureModel(
         system_name=model.repository_name,
         system_type=_system_type(model, source_text.lower(), runtime_entry_points),
-        description=_system_description(model, relationship_sources),
+        description=_system_description(model, relationship_sources, components, relevance),
         components=components,
         subsystems=_subsystems(components),
         layers=_layers(components),
@@ -1501,6 +1633,7 @@ def extract_architecture(model: RepositoryModel) -> ArchitectureModel:
         )),
         relationships=relationships,
         entry_points=entry_points,
+        public_api_entry_points=public_api_paths,
         external_dependencies=external_dependencies,
         data_stores=data_stores,
         execution_flows=flow,
@@ -1677,14 +1810,27 @@ def render_execution_flow_mermaid(model: ArchitectureModel) -> str:
     for path in flow["paths"]:
         ids = path["component_ids"]
         first = components[ids[0]]
-        lines.append(
-            f"    User->>{first.id}: Start at "
-            f"{_mermaid_text(', '.join(flow['entry_points']) or 'application entry')}"
-        )
+        optional = path.get("kind") == "optional"
+        if optional:
+            lines.append("    opt Optional integration")
+        elif flow["entry_points"] and all(
+            Path(entry).name == "__init__.py" for entry in flow["entry_points"]
+        ):
+            lines.append(
+                f"    Note over {first.id}: Public API: "
+                f"{_mermaid_text(', '.join(flow['entry_points']))}"
+            )
+        else:
+            lines.append(
+                f"    User->>{first.id}: Start at "
+                f"{_mermaid_text(', '.join(flow['entry_points']) or 'application entry')}"
+            )
         for source_id, target_id, relation in zip(
             ids, ids[1:], path["relationship_types"]
         ):
             lines.append(f"    {source_id}->>{target_id}: {_mermaid_text(relation)}")
+        if optional:
+            lines.append("    end")
     return "\n".join(lines) + "\n"
 
 

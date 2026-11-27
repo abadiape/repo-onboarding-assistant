@@ -6,6 +6,9 @@ from pathlib import PurePosixPath
 
 from models.architecture_model import ArchitectureModel
 from analyzers.domain_discovery import BusinessCapability, DomainDiscovery, _tokens
+from models.models import RepositoryModel
+from models.repository_archetype import ArchetypeResult, RepositoryArchetype
+from analyzers.technical_onboarding import technical_plan, technical_topics
 
 
 _DOMAIN_IMPACTS = {
@@ -78,6 +81,8 @@ class BusinessInsights:
     critical_integrations: list[dict[str, str | list[str]]] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
     frameworks: list[str] = field(default_factory=list)
+    learning_plan: list[dict[str, str]] = field(default_factory=list)
+    technical_topics: list[dict[str, object]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -97,9 +102,21 @@ def _domain_confidence(
 
 
 def analyze_business_insights(
-    architecture: ArchitectureModel, domains: DomainDiscovery
+    architecture: ArchitectureModel, domains: DomainDiscovery,
+    archetype: ArchetypeResult | None = None, model: RepositoryModel | None = None,
 ) -> BusinessInsights:
     """Score evidence-backed domain value and rank custom modules for onboarding."""
+    if archetype is not None and archetype.archetype != RepositoryArchetype.BUSINESS_APPLICATION:
+        if model is None:
+            raise ValueError("A repository model is required for technical onboarding insights")
+        topics = technical_topics(model, archetype.archetype)
+        plan = technical_plan(archetype.archetype, topics, architecture.public_api_entry_points)
+        return BusinessInsights(
+            frameworks=architecture.frameworks,
+            learning_plan=plan,
+            technical_topics=[asdict(topic) for topic in topics],
+            recommendations=[step["detail"] for step in plan],
+        )
     architecture_integrations = {
         item.casefold() for item in architecture.external_dependencies
     }
@@ -481,6 +498,8 @@ def render_critical_modules_markdown(insights: BusinessInsights) -> str:
 
 
 def first_week_onboarding_plan(insights: BusinessInsights) -> list[dict[str, str]]:
+    if insights.learning_plan:
+        return insights.learning_plan
     actionable_domains = [
         item for item in insights.domain_impacts
         if item.onboarding_importance in {"Very High", "High"}

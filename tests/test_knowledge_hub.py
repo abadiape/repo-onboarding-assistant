@@ -41,3 +41,27 @@ def test_hub_preserves_inferred_edges_and_escapes_untrusted_names():
     assert "https://" not in html
     assert "flowchart TD" not in html
     assert "<svg " in html
+
+
+def test_flow_diagram_explains_components_and_relationship_evidence():
+    model = RepositoryModel(repository_name="example")
+    architecture = ArchitectureModel(
+        system_name="example", system_type="application", description="Layout",
+        components=[
+            ArchitectureComponent("a", "Models", "domain", "Model paths may hold data.", locations=["src/model"]),
+            ArchitectureComponent("b", "Providers", "integration", "Provider roles vary.", locations=["src/providers"]),
+        ],
+        execution_flows=[{"paths": [{
+            "component_ids": ["a", "b"], "relationship_types": ["references"],
+            "relationship_evidence": [["src/model/example.py:2"]],
+        }]}],
+    )
+    hub = build_knowledge_hub(
+        model, architecture, DomainDiscovery(), BusinessInsights(),
+        BusinessNarrative(system_name="example", system_purpose="Example"), [],
+    )
+    html = render_knowledge_hub_html(hub)
+    assert 'class="diagram-legend" open' in html
+    assert "Model paths may hold data." in html
+    assert "Provider roles vary." in html
+    assert "src/model/example.py:2" in html
