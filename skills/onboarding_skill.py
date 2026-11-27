@@ -10,6 +10,8 @@ Produces (in the output dir):
 
 Returns a harness SkillResult with registered Artifacts.
 """
+# Explicit aliases preserve the original import paths.
+# ruff: noqa: PLC0414
 from __future__ import annotations
 
 import argparse
@@ -36,17 +38,6 @@ from analyzers.business_insights import (
     render_executive_summary_markdown,
     render_first_week_onboarding_markdown,
 )
-from analyzers.narrative_generation import (
-    generate_business_narrative,
-    render_business_story_markdown,
-    render_business_risk_story_markdown,
-    render_critical_workflows_markdown,
-    render_first_day_briefing_markdown,
-    render_first_week_story_markdown,
-    render_repository_story_markdown,
-)
-from artifacts.dashboard import render_dashboard_html
-from artifacts.knowledge_hub import build_knowledge_hub, render_knowledge_hub_html
 from analyzers.domain_discovery import (
     analyze_domains,
     domain_learning_steps,
@@ -54,68 +45,42 @@ from analyzers.domain_discovery import (
     render_business_domains_markdown,
     render_onboarding_priorities_markdown,
 )
-from models.models import RepositoryModel
+from analyzers.narrative_generation import (
+    generate_business_narrative,
+    render_business_risk_story_markdown,
+    render_business_story_markdown,
+    render_critical_workflows_markdown,
+    render_first_day_briefing_markdown,
+    render_first_week_story_markdown,
+    render_repository_story_markdown,
+)
 from analyzers.onboarding_analyzer import (
     analyze_inventory,
     render_learning_path_markdown,
     render_summary_markdown,
 )
-from analyzers.repository_scan import scan_repository
 from analyzers.repository_archetype import analyze_repository_archetype
+from analyzers.repository_scan import scan_repository
 from analyzers.technical_onboarding import technical_markdown, technical_topics
+from artifacts.dashboard import render_dashboard_html
+from artifacts.knowledge_hub import build_knowledge_hub, render_knowledge_hub_html
+from models.models import RepositoryModel
 from models.repository_archetype import RepositoryArchetype
-
-try:
-    from llm_harness_lite import Artifact, ArtifactRegistry, ArtifactType, SkillResult
-except ImportError:  # Fallback so the skill logic stays testable without the harness
-    from enum import Enum
-
-    class ArtifactType(str, Enum):
-        MARKDOWN = "markdown"
-        JSON = "json"
-        MERMAID = "mermaid"
-        HTML = "html"
-
-    class Artifact:  # type: ignore[no-redef]
-        def __init__(self, name, type, path, description="", metadata=None):
-            self.name = name
-            self.type = type
-            self.path = path
-            self.description = description
-            self.metadata = metadata or {}
-
-        def to_dict(self):
-            t = self.type.value if isinstance(self.type, ArtifactType) else self.type
-            return {"name": self.name, "type": t, "path": str(self.path),
-                    "description": self.description, "metadata": self.metadata}
-
-    class SkillResult:  # type: ignore[no-redef]
-        def __init__(self, summary, artifacts=None):
-            self.summary = summary
-            self.artifacts = artifacts or []
-
-    class ArtifactRegistry:  # type: ignore[no-redef]
-        def __init__(self):
-            self._artifacts = []
-
-        def register(self, artifact):
-            self._artifacts.append(artifact)
-            return artifact
-
-        def list_artifacts(self):
-            return list(self._artifacts)
-
-        def export_manifest(self, path="outputs/manifest.json"):
-            from datetime import datetime, timezone
-
-            manifest_path = Path(path)
-            manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            manifest = {
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "artifacts": [a.to_dict() for a in self._artifacts],
-            }
-            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-            return manifest_path
+from skills.artifact_registry import (
+    Artifact as Artifact,
+)
+from skills.artifact_registry import (
+    ArtifactRegistry as ArtifactRegistry,
+)
+from skills.artifact_registry import (
+    ArtifactType as ArtifactType,
+)
+from skills.artifact_registry import (
+    SkillResult as SkillResult,
+)
+from skills.artifact_registry import (
+    register_artifacts,
+)
 
 
 def run_onboarding(
@@ -301,144 +266,7 @@ def run_onboarding(
     )
     knowledge_hub_html_path.write_text(render_knowledge_hub_html(hub), encoding="utf-8")
 
-    registry = ArtifactRegistry()
-    registry.register(Artifact(
-        name="summary.md", type=ArtifactType.MARKDOWN, path=str(summary_path),
-        description="Repository overview in Markdown.",
-    ))
-    registry.register(Artifact(
-        name="learning_path.md", type=ArtifactType.MARKDOWN, path=str(learning_path_path),
-        description="Step-by-step suggested onboarding path.",
-    ))
-    registry.register(Artifact(
-        name="repository_map.json", type=ArtifactType.JSON, path=str(repo_map_path),
-        description="Structured RepositoryModel for the scanned repository.",
-    ))
-    registry.register(Artifact(
-        name="architecture_summary.md",
-        type=ArtifactType.MARKDOWN,
-        path=str(architecture_summary_path),
-        description="Onboarding-focused explanation of the inferred system architecture.",
-    ))
-    registry.register(Artifact(
-        name="architecture_map.json",
-        type=ArtifactType.JSON,
-        path=str(architecture_map_path),
-        description="Machine-readable architecture components and relationships.",
-    ))
-    registry.register(Artifact(
-        name="business_domains.md",
-        type=ArtifactType.MARKDOWN,
-        path=str(business_domains_path),
-        description="Business domains, related custom modules, and evidence.",
-    ))
-    registry.register(Artifact(
-        name="business_capabilities.md",
-        type=ArtifactType.MARKDOWN,
-        path=str(business_capabilities_path),
-        description="Business capabilities and inferred external ownership boundaries.",
-    ))
-    registry.register(Artifact(
-        name="onboarding_priorities.md",
-        type=ArtifactType.MARKDOWN,
-        path=str(onboarding_priorities_path),
-        description="Business-focused onboarding priorities and areas to defer initially.",
-    ))
-    registry.register(Artifact(
-        name="domain_map.json",
-        type=ArtifactType.JSON,
-        path=str(domain_map_path),
-        description="Machine-readable domains, capabilities, integrations, and priorities.",
-    ))
-    for name, path, description in (
-        (
-            "executive_summary.md",
-            executive_summary_path,
-            "Concise business-value summary and recommended initial focus.",
-        ),
-        (
-            "critical_modules.md",
-            critical_modules_path,
-            "Top-ranked custom modules with domain ownership, impact, and rationale.",
-        ),
-        (
-            "first_week_onboarding.md",
-            first_week_onboarding_path,
-            "Five-day onboarding plan focused on business domains and critical workflows.",
-        ),
-        (
-            "business_insights.md",
-            business_insights_path,
-            "Evidence-based business impact and onboarding recommendations.",
-        ),
-        (
-            "business_story.md",
-            business_story_path,
-            "Narrative explanation of the inferred business purpose, flow, and priorities.",
-        ),
-        (
-            "critical_workflows.md",
-            critical_workflows_path,
-            "Capability-based workflow guides with domains, modules, and onboarding significance.",
-        ),
-        (
-            "first_week_story.md",
-            first_week_story_path,
-            "Narrative five-day learning sequence based on discovered business priorities.",
-        ),
-        (
-            "repository_story.md",
-            repository_story_path,
-            "Repository-specific explanation of business flows, domains, and customizations.",
-        ),
-        (
-            "business_risk_story.md",
-            business_risk_story_path,
-            "Heuristic onboarding sensitivity narrative for directly supported business areas.",
-        ),
-        (
-            "first_day_briefing.md",
-            first_day_briefing_path,
-            "Concise first-day introduction to this repository's business areas and learning order.",
-        ),
-    ):
-        registry.register(Artifact(
-            name=name,
-            type=ArtifactType.MARKDOWN,
-            path=str(path),
-            description=description,
-        ))
-    mermaid_type = getattr(ArtifactType, "MERMAID", "mermaid")
-    for name, diagram_path in diagram_paths.items():
-        registry.register(Artifact(
-            name=name, type=mermaid_type, path=str(diagram_path),
-            description=f"Mermaid visualization generated from ArchitectureModel: {name}.",
-        ))
-    registry.register(Artifact(
-        name="dashboard.html",
-        type=getattr(ArtifactType, "HTML", "html"),
-        path=str(dashboard_path),
-        description="Standalone onboarding dashboard with embedded model artifacts.",
-    ))
-    registry.register(Artifact(
-        name="knowledge_hub.json", type=ArtifactType.JSON, path=str(knowledge_hub_path),
-        description="Aggregated structured onboarding knowledge.",
-    ))
-    registry.register(Artifact(
-        name="knowledge_hub.html", type=getattr(ArtifactType, "HTML", "html"),
-        path=str(knowledge_hub_html_path),
-        description="Portable Knowledge Hub for repository onboarding.",
-    ))
-
-    # Register the manifest after the first export, then re-export so it
-    # lists itself along with the generated artifacts.
-    manifest_path = out / "manifest.json"
-    registry.export_manifest(manifest_path)
-    registry.register(Artifact(
-        name="manifest.json", type=ArtifactType.JSON, path=str(manifest_path),
-        description="Artifact manifest generated by ArtifactRegistry.",
-    ))
-    registry.export_manifest(manifest_path)
+    registry = register_artifacts(out, diagram_paths)
 
     result = SkillResult(
         summary="Repository onboarding analysis completed",

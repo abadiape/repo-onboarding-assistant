@@ -5,8 +5,9 @@ used at the skill boundary (see onboarding_skill.py).
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 
 @dataclass
@@ -64,7 +65,7 @@ class RepositoryModel:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> "RepositoryModel":
+    def from_dict(cls, data: Mapping[str, Any]) -> RepositoryModel:
         known = {f for f in cls.__dataclass_fields__}
         filtered = {k: v for k, v in data.items() if k in known}
         filtered["dependencies"] = [

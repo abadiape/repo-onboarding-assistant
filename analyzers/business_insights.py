@@ -1,15 +1,35 @@
-"""Prioritize domain-discovery findings for actionable developer onboarding."""
+"""Business insights."""
+# Explicit aliases preserve the original import paths.
+# ruff: noqa: PLC0414
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from pathlib import PurePosixPath
 
+from analyzers.domain_discovery import _tokens
+from analyzers.technical_onboarding import technical_plan, technical_topics
+from artifacts.business_plan import (
+    first_week_onboarding_plan as first_week_onboarding_plan,
+)
+from artifacts.business_plan import (
+    render_first_week_onboarding_markdown as render_first_week_onboarding_markdown,
+)
+from artifacts.business_reports import (
+    render_business_insights_markdown as render_business_insights_markdown,
+)
+from artifacts.business_reports import (
+    render_critical_modules_markdown as render_critical_modules_markdown,
+)
+from artifacts.business_reports import (
+    render_executive_summary_markdown as render_executive_summary_markdown,
+)
 from models.architecture_model import ArchitectureModel
-from analyzers.domain_discovery import BusinessCapability, DomainDiscovery, _tokens
+from models.business_insights import BusinessInsights as BusinessInsights
+from models.business_insights import DomainImpact as DomainImpact
+from models.business_insights import ModulePriority as ModulePriority
+from models.domain_discovery import BusinessCapability, DomainDiscovery
 from models.models import RepositoryModel
 from models.repository_archetype import ArchetypeResult, RepositoryArchetype
-from analyzers.technical_onboarding import technical_plan, technical_topics
-
 
 _DOMAIN_IMPACTS = {
     "Payments": "Critical",
@@ -19,6 +39,8 @@ _DOMAIN_IMPACTS = {
     "Shipping": "High",
     "Customer Experience": "High",
 }
+
+
 _DOMAIN_RATIONALES = {
     "Payments": "Payment and transaction customizations can affect revenue collection.",
     "Orders": "Order capture and lifecycle workflows are central commerce operations.",
@@ -31,61 +53,30 @@ _DOMAIN_RATIONALES = {
     "Search": "Search helps customers discover relevant products and content.",
     "Loyalty": "Rewards can encourage customer retention and repeat purchases.",
 }
+
+
 _IMPORTANCE_RANK = {"Very High": 4, "High": 3, "Medium": 2, "Low": 1}
+
+
 _IMPACT_RANK = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
+
+
 _MODULE_TIER_RANK = {"Business Critical": 3, "Important": 2, "Supporting": 1}
+
+
 _DOMAIN_ORDER = {
     name: index for index, name in enumerate(
         ("Payments", "Orders", "ERP Integrations", "Inventory", "Shipping", "Customer Experience")
     )
 }
+
+
 _SUPPORTING_MODULE_TOKENS = {
     "attribute", "attributes", "clean", "cleanup", "mail", "price", "schedule", "trigger",
 }
-_MAX_CRITICAL_MODULES = 10
+
+
 _SOURCE_SUFFIXES = {".cs", ".go", ".java", ".js", ".php", ".py", ".rb", ".rs", ".ts"}
-
-
-@dataclass
-class DomainImpact:
-    name: str
-    confidence: float
-    business_impact: str
-    onboarding_importance: str
-    rationale: str
-    modules: list[str] = field(default_factory=list)
-    integrations: list[str] = field(default_factory=list)
-    description: str = ""
-    starting_module: str | None = None
-    learning_order: list[str] = field(default_factory=list)
-    learning_recommendation: str = ""
-
-
-@dataclass
-class ModulePriority:
-    name: str
-    path: str
-    tier: str
-    confidence: float
-    business_impact: str
-    domains: list[str] = field(default_factory=list)
-    rationale: str = ""
-    recommendation: str = ""
-
-
-@dataclass
-class BusinessInsights:
-    domain_impacts: list[DomainImpact] = field(default_factory=list)
-    capabilities: list[BusinessCapability] = field(default_factory=list)
-    ranked_modules: list[ModulePriority] = field(default_factory=list)
-    critical_integrations: list[dict[str, str | list[str]]] = field(default_factory=list)
-    recommendations: list[str] = field(default_factory=list)
-    frameworks: list[str] = field(default_factory=list)
-    learning_plan: list[dict[str, str]] = field(default_factory=list)
-    technical_topics: list[dict[str, object]] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return asdict(self)
 
 
 def _domain_confidence(
@@ -339,293 +330,3 @@ def analyze_business_insights(
         recommendations=recommendations,
         frameworks=architecture.frameworks,
     )
-
-
-def render_executive_summary_markdown(
-    architecture: ArchitectureModel, insights: BusinessInsights
-) -> str:
-    high_value = [
-        item for item in insights.domain_impacts
-        if item.business_impact in {"Critical", "High"}
-    ][:4]
-    top_modules = [item for item in insights.ranked_modules if item.tier != "Supporting"][:4]
-    customized_domains = [
-        item for item in insights.domain_impacts if item.modules
-    ][:4]
-    platform = ", ".join(architecture.frameworks[:2]) or architecture.system_type
-    if customized_domains:
-        areas = "; ".join(
-            f"{item.name} ({', '.join(item.modules[:2])})"
-            for item in customized_domains
-        )
-        description = (
-            f"This {platform} implementation has {len(insights.ranked_modules)} "
-            f"discovered project-owned modules. Findings concentrate custom business "
-            f"behavior in {areas}."
-        )
-    elif high_value:
-        description = (
-            "The repository scan identifies business-priority areas in "
-            + ", ".join(item.name for item in high_value[:3])
-            + ", but did not match those areas to specific custom modules."
-        )
-    else:
-        description = architecture.description.strip() or (
-            f"{architecture.system_name} is a {architecture.system_type} repository."
-        )
-    lines = [
-        f"# Executive Summary — {architecture.system_name}",
-        "",
-        description,
-    ]
-    lines += ["", "## Where business value appears concentrated", ""]
-    if high_value:
-        for item in high_value:
-            evidence = []
-            if item.modules:
-                evidence.append(
-                    "matched modules " + ", ".join(f"`{name}`" for name in item.modules[:4])
-                )
-            if item.integrations:
-                evidence.append(
-                    "configured integrations "
-                    + ", ".join(f"`{name}`" for name in item.integrations[:3])
-                )
-            related_capabilities = [
-                capability.name for capability in insights.capabilities
-                if item.name in capability.domains
-            ][:2]
-            if related_capabilities:
-                evidence.append("capabilities " + ", ".join(related_capabilities))
-            finding = (
-                "Repository evidence links this area to " + "; ".join(evidence) + ". "
-                if evidence else
-                item.rationale + " "
-            )
-            lines.append(
-                f"- **{item.name}** — {finding}(impact: {item.business_impact}; "
-                f"evidence: {item.confidence:.0%}, heuristic)"
-            )
-    else:
-        lines.append(
-            "No high-impact domain was confidently inferred; validate business priorities with a maintainer."
-        )
-    lines += ["", "## Recommended first focus", ""]
-    if top_modules:
-        for index, module in enumerate(top_modules, 1):
-            capabilities = [
-                capability.name for capability in insights.capabilities
-                if module.name in capability.modules
-            ][:2]
-            reason = (
-                "associated with " + ", ".join(module.domains)
-                if module.domains else
-                "identified as project-owned custom application code"
-            )
-            if capabilities:
-                reason += "; capability: " + ", ".join(capabilities)
-            lines.append(
-                f"{index}. **{module.name}** — {reason}. Confirm its role with a maintainer."
-            )
-    else:
-        lines.append("Start with the repository overview and ask which workflows are most important.")
-    if insights.critical_integrations:
-        lines += [
-            "",
-            "Critical integration boundaries: "
-            + ", ".join(item["name"] for item in insights.critical_integrations[:4]),
-        ]
-    else:
-        erp = next(
-            (item for item in insights.domain_impacts
-             if item.name == "ERP Integrations" and item.business_impact in {"Critical", "High"}),
-            None,
-        )
-        lines += ["", (
-            "ERP integration workflows were inferred, but no specific business-critical external "
-            "service was identified; confirm the integration boundary with a maintainer."
-            if erp else
-            "No business-critical external integration was identified; confirm integration "
-            "boundaries with a maintainer."
-        )]
-    lines += [
-        "",
-        "Defer framework internals and vendor or generated code initially, where present; "
-        "revisit them when a task requires it.",
-        "",
-        "Scores summarize repository evidence, not measured revenue or calibrated probabilities. "
-        "Confirm operational importance and ownership with maintainers.",
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def render_critical_modules_markdown(insights: BusinessInsights) -> str:
-    if not insights.ranked_modules:
-        return "# Critical Modules\n\nNo custom modules were identified.\n"
-    modules = insights.ranked_modules[:_MAX_CRITICAL_MODULES]
-    lines = [
-        "# Critical Modules",
-        "",
-        f"Top {len(modules)} modules ranked by inferred business impact and onboarding importance. "
-        "The complete module inventory remains in `domain_map.json`.",
-        "",
-    ]
-    for tier in ("Business Critical", "Important", "Supporting"):
-        matching = [module for module in modules if module.tier == tier]
-        if not matching:
-            continue
-        lines += [f"## {tier}", ""]
-        for module in matching:
-            lines += [
-                f"### {module.name}",
-                "",
-                f"- **Domain ownership:** {', '.join(module.domains) or 'Unassigned'}",
-                f"- **Module location:** `{module.path}`",
-                f"- **Business impact:** {module.business_impact}",
-                f"- **Related domain evidence confidence:** {module.confidence:.0%} (heuristic)",
-                f"- **Rationale:** {module.rationale}",
-                f"- **Recommendation:** {module.recommendation}",
-                "",
-            ]
-    omitted = len(insights.ranked_modules) - len(modules)
-    if omitted:
-        lines += [
-            f"{omitted} additional modules are omitted from this summary; consult `domain_map.json` when a task requires them.",
-            "",
-        ]
-    return "\n".join(lines)
-
-
-def first_week_onboarding_plan(insights: BusinessInsights) -> list[dict[str, str]]:
-    if insights.learning_plan:
-        return insights.learning_plan
-    actionable_domains = [
-        item for item in insights.domain_impacts
-        if item.onboarding_importance in {"Very High", "High"}
-    ]
-    selected_domains = actionable_domains[:4]
-    framework = ", ".join(insights.frameworks) if insights.frameworks else "the application"
-    days = [
-        {
-            "title": "Product context and architecture",
-            "detail": (
-                f"Understand {framework} architecture and its module or component boundaries. "
-                "Review the repository purpose and confirm the primary users and workflows with a maintainer."
-            ),
-        },
-    ]
-    for domain in selected_domains:
-        detail = f"{domain.rationale} {domain.learning_recommendation}"
-        integrations = [
-            item["name"] for item in insights.critical_integrations
-            if domain.name in item["domains"]
-        ]
-        if integrations:
-            detail += (
-                f" Trace a critical integration: {', '.join(integrations[:2])}. "
-                "Confirm runtime activation and ownership."
-            )
-        elif domain.name == "ERP Integrations":
-            detail += (
-                " Trace the external ERP boundary and confirm the system, runtime activation, "
-                "and ownership with a maintainer."
-            )
-        days.append({"title": f"Understand {domain.name}", "detail": detail})
-    fallback_days = [
-        ("Identify the main business capability", "Ask a maintainer which customer or operational workflow matters most."),
-        ("Clarify ownership and change boundaries", "Choose a feature and confirm its owner and downstream systems."),
-        ("Trace a business workflow", "Follow a capability through its application and integration boundaries."),
-        ("Review verification and delivery", "Run documented tests and review how changes are validated."),
-    ]
-    for title, detail in fallback_days:
-        if len(days) == 5:
-            break
-        days.append({"title": title, "detail": detail})
-    days[-1]["detail"] += " Run the project's documented tests before making a change."
-    return days
-
-
-def render_first_week_onboarding_markdown(insights: BusinessInsights) -> str:
-    days = first_week_onboarding_plan(insights)
-    lines = [
-        "# First-Week Onboarding",
-        "",
-        "A practical five-day plan focused on business value, custom logic, and integration boundaries.",
-        "",
-    ]
-    for index, day in enumerate(days, 1):
-        lines += [f"## Day {index}: {day['title']}", "", day["detail"], ""]
-    return "\n".join(lines)
-
-
-def render_business_insights_markdown(insights: BusinessInsights) -> str:
-    lines = [
-        "# Business Insights",
-        "",
-        "These insights summarize patterns in names, ownership boundaries, and architecture evidence; "
-        "they are hypotheses to validate, not operational measurements.",
-        "",
-    ]
-    high_domains = [
-        item for item in insights.domain_impacts
-        if item.business_impact in {"Critical", "High"}
-    ][:5]
-    if high_domains:
-        lines += ["## Highest-value areas to understand", ""]
-        for domain in high_domains:
-            module_names = ", ".join(domain.modules[:4]) or "No matching custom module identified"
-            integration_names = ", ".join(domain.integrations[:3])
-            integration_detail = (
-                f" Inferred integration boundary: {integration_names}."
-                if integration_names else ""
-            )
-            lines.append(
-                f"- **{domain.name}** — {domain.rationale} "
-                f"Matched custom modules: {module_names}.{integration_detail} "
-                f"Onboarding importance is {domain.onboarding_importance} "
-                f"with {domain.confidence:.0%} evidence confidence."
-            )
-        lines.append("")
-    if insights.critical_integrations:
-        lines += ["## Business-critical integrations", ""]
-        for integration in insights.critical_integrations[:5]:
-            domain_list = ", ".join(integration["domains"]) or "unassigned domain"
-            lines.append(
-                f"- **{integration['name']}** crosses an inferred {integration['ownership_boundary']} "
-                f"boundary and is associated with {domain_list}. Confirm its runtime use and owner."
-            )
-        lines.append("")
-    elif any(
-        item.name == "ERP Integrations" and item.business_impact in {"Critical", "High"}
-        for item in insights.domain_impacts
-    ):
-        lines += [
-            "## Integration workflows to investigate",
-            "",
-            "ERP integration workflows were inferred, but no specific external service was identified. "
-            "Confirm the boundary, runtime activation, and owner with a maintainer.",
-            "",
-        ]
-    actionable_capabilities = [
-        item for item in insights.capabilities if item.priority != "low"
-    ]
-    if actionable_capabilities:
-        lines += ["## Business capabilities to trace", ""]
-        for capability in actionable_capabilities[:5]:
-            domains = ", ".join(capability.domains) or "domain not confidently assigned"
-            modules = ", ".join(capability.modules[:4]) or "follow the relevant workflow"
-            lines.append(f"- **{capability.name}** ({domains}): start with {modules}.")
-        lines.append("")
-    lines += ["## Recommendations", ""]
-    lines += [f"- {recommendation}" for recommendation in insights.recommendations[:6]]
-    lines += [
-        "",
-        "## Scoring guide",
-        "",
-        "Confidence estimates how much repository evidence supports a finding. "
-        "Business impact describes the likely consequence of changing the area; "
-        "onboarding importance determines learning order. They are separate heuristic ratings.",
-        "",
-    ]
-    return "\n".join(lines)

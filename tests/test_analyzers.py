@@ -14,8 +14,8 @@ from analyzers.analyzers import (
     PythonAnalyzer,
     select_analyzers,
 )
-from models.models import Dependency, RepositoryFile, RepositoryModel
 from analyzers.repository_scan import scan_repository
+from models.models import Dependency, RepositoryFile, RepositoryModel
 
 
 def test_selects_generic_and_matching_language_analyzers():

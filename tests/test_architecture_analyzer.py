@@ -14,9 +14,17 @@ from analyzers.architecture_analyzer import (
     render_subsystem_map_mermaid,
     render_system_overview_mermaid,
 )
+from analyzers.repository_relevance import (
+    RepositoryArea,
+    RepositoryRelevance,
+    classify_path,
+)
+from models.architecture_model import (
+    ArchitectureComponent,
+    ArchitectureModel,
+    ArchitectureRelationship,
+)
 from models.models import Dependency, RepositoryFile, RepositoryModel
-from models.architecture_model import ArchitectureComponent, ArchitectureModel, ArchitectureRelationship
-from analyzers.repository_relevance import RepositoryArea, RepositoryRelevance, classify_path
 
 
 def test_architecture_model_discovers_backend_components_and_renders_artifacts(tmp_path):

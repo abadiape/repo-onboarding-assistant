@@ -12,6 +12,60 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from skills.onboarding_skill import run_onboarding
 
 
+@pytest.mark.parametrize(
+    ("new_module", "old_module", "name"),
+    [
+        ("artifacts.architecture_diagrams", "analyzers.architecture_analyzer", "render_execution_flow_mermaid"),
+        ("artifacts.architecture_reports", "analyzers.architecture_analyzer", "render_architecture_summary_markdown"),
+        ("artifacts.business_reports", "analyzers.business_insights", "render_critical_modules_markdown"),
+        ("artifacts.business_plan", "analyzers.business_insights", "first_week_onboarding_plan"),
+        ("artifacts.domain_reports", "analyzers.domain_discovery", "render_business_domains_markdown"),
+        ("artifacts.narrative_business_reports", "analyzers.narrative_generation", "render_business_story_markdown"),
+        ("artifacts.narrative_repository_reports", "analyzers.narrative_generation", "render_repository_story_markdown"),
+        ("artifacts.knowledge_hub_data", "artifacts.knowledge_hub", "build_knowledge_hub"),
+        ("models.repository_relevance", "analyzers.repository_relevance", "RepositoryRelevance"),
+        ("models.domain_discovery", "analyzers.domain_discovery", "DomainDiscovery"),
+        ("models.business_insights", "analyzers.business_insights", "BusinessInsights"),
+        ("models.business_narrative", "analyzers.narrative_generation", "BusinessNarrative"),
+        ("skills.artifact_registry", "skills.onboarding_skill", "ArtifactRegistry"),
+    ],
+)
+def test_extracted_modules_import_first_and_preserve_original_exports(new_module, old_module, name):
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import importlib, sys; "
+                "new = importlib.import_module(sys.argv[1]); "
+                "old = importlib.import_module(sys.argv[2]); "
+                "assert getattr(new, sys.argv[3]) is getattr(old, sys.argv[3])"
+            ),
+            new_module,
+            old_module,
+            name,
+        ],
+        cwd=Path(__file__).resolve().parent.parent,
+        check=True,
+    )
+
+
+def test_architecture_model_does_not_import_analyzers():
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; import models.architecture_model; "
+                "assert not any(name == 'analyzers' or name.startswith('analyzers.') "
+                "for name in sys.modules)"
+            ),
+        ],
+        cwd=Path(__file__).resolve().parent.parent,
+        check=True,
+    )
+
+
 def test_optional_qdrant_appears_in_onboarding_without_implying_deployment(tmp_path):
     repo = tmp_path / "library"
     repo.mkdir()

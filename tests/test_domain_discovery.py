@@ -4,7 +4,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from skills.onboarding_skill import run_onboarding
 from analyzers.business_insights import (
     analyze_business_insights,
     render_executive_summary_markdown,
@@ -12,6 +11,7 @@ from analyzers.business_insights import (
 )
 from analyzers.domain_discovery import BusinessDomain, CustomModule, DomainDiscovery
 from models.architecture_model import ArchitectureModel
+from skills.onboarding_skill import run_onboarding
 
 
 def test_domain_discovery_outputs_and_business_first_learning_path(tmp_path):

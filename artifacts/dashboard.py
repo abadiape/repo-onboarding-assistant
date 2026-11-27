@@ -4,10 +4,10 @@ from __future__ import annotations
 import html
 import re
 
-from models.models import RepositoryModel
 from analyzers.onboarding_analyzer import OnboardingInsights
-from models.architecture_model import ArchitectureModel
 from analyzers.repository_relevance import aggregate_dependencies, relevant_model
+from models.architecture_model import ArchitectureModel
+from models.models import RepositoryModel
 
 
 def _escape(value: object) -> str:

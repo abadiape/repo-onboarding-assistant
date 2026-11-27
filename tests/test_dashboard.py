@@ -3,11 +3,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from artifacts.dashboard import render_dashboard_html
 from analyzers.architecture_analyzer import render_execution_flow_mermaid
-from models.models import RepositoryModel
-from models.architecture_model import ArchitectureComponent, ArchitectureModel, ArchitectureRelationship
 from analyzers.onboarding_analyzer import OnboardingInsights
+from artifacts.dashboard import render_dashboard_html
+from models.architecture_model import (
+    ArchitectureComponent,
+    ArchitectureModel,
+    ArchitectureRelationship,
+)
+from models.models import RepositoryModel
 
 
 def test_dashboard_renders_mermaid_and_preserves_escaped_source():
