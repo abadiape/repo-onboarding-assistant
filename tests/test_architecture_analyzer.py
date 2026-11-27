@@ -166,6 +166,39 @@ def test_magento_imports_and_type_references_are_not_execution_flow():
         ArchitectureRelationship("b", "c", "references", "", evidence=["app/code/A/Two/b.php:2"]),
     ]
     assert not _execution_flows(components, relationships, [], [], [], require_execution_evidence=True)
+    architecture = ArchitectureModel(
+        system_name="shop", system_type="application", description="",
+        components=components, relationships=relationships, frameworks=["Magento"],
+    )
+    diagram = render_execution_flow_mermaid(architecture)
+    assert diagram.startswith("flowchart LR\n")
+    assert "Associations only - not a verified execution sequence or runtime calls" in diagram
+    assert 'a["Observers"]' in diagram
+    assert "a -->|imports| b" in diagram
+    assert "b -->|references| c" in diagram
+    assert "User" not in diagram
+    assert architecture.execution_flows == []
+    architecture.frameworks = ["Other"]
+    assert "No component execution path" in render_execution_flow_mermaid(architecture)
+    architecture.frameworks = ["Magento"]
+    architecture.relationships = []
+    assert "No component execution path" in render_execution_flow_mermaid(architecture)
+
+
+def test_magento_execution_flow_takes_precedence_over_association_fallback():
+    model = ArchitectureModel(
+        system_name="shop", system_type="application", description="", frameworks=["Magento"],
+        components=[ArchitectureComponent("a", "API", "interface", ""),
+                    ArchitectureComponent("b", "Service", "application", "")],
+        relationships=[ArchitectureRelationship("a", "b", "dispatches to", "")],
+        execution_flows=[{"entry_points": [], "paths": [{
+            "component_ids": ["a", "b"], "relationship_types": ["dispatches to"],
+        }]}],
+    )
+    diagram = render_execution_flow_mermaid(model)
+    assert diagram.startswith("sequenceDiagram\n")
+    assert "a->>b: dispatches to" in diagram
+    assert "Associations only" not in diagram
 
 
 def test_magento_overview_preserves_specific_readme_description():
@@ -365,6 +398,30 @@ def test_integrations_ignore_docs_optional_profiles_and_dev_dependencies(tmp_pat
     assert any("PostgreSQL" in item for item in architecture.data_stores)
     assert any("Stripe" in item for item in architecture.external_dependencies)
     assert not any("MongoDB" in item or "MySQL" in item for item in architecture.data_stores)
+
+
+def test_qdrant_runtime_and_optional_evidence_are_distinct():
+    model = RepositoryModel(
+        repository_name="app",
+        dependencies=[
+            Dependency("qdrant-client", None, "pyproject.toml", "optional:qdrant"),
+            Dependency("qdrant-client", None, "pyproject.toml", "optional:full"),
+            Dependency("qdrant-client", None, "pyproject.toml", "optional:dev"),
+            Dependency("qdrant-client", None, "vendor/pkg/pyproject.toml", "optional:qdrant"),
+        ],
+    )
+    architecture = extract_architecture(model)
+    assert architecture.data_stores == []
+    assert architecture.optional_integrations == [
+        "Qdrant (vector database; optional dependency qdrant-client in pyproject.toml; extras: full, qdrant)"
+    ]
+    assert "not proof of activation or deployment" in render_architecture_summary_markdown(architecture)
+    model.dependencies = [Dependency("qdrant-client", None, "requirements.txt")]
+    architecture = extract_architecture(model)
+    assert architecture.data_stores == ["Qdrant (vector database)"]
+    assert architecture.optional_integrations == []
+    model.dependencies = [Dependency("notqdrant", None, "requirements.txt")]
+    assert extract_architecture(model).data_stores == []
 
 
 def test_return_annotation_does_not_mean_returning_the_entire_owner_component(tmp_path):

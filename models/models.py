@@ -58,6 +58,7 @@ class RepositoryModel:
     files: list[RepositoryFile] = field(default_factory=list)
     detected_patterns: list[str] = field(default_factory=list)
     locked_dependencies: list[Dependency] = field(default_factory=list)
+    api_inventory: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

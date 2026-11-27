@@ -37,6 +37,27 @@ It currently inventories:
 - Likely entry points, build/test suggestions, and CI/CD configuration files
 - Shell commands documented in relevant Markdown code blocks
 - Inline `run` commands found in CI workflow YAML
+- Project-owned Magento `app/code/*/*/etc/webapi.xml` route declarations and
+  locally declared service contract parameters and return types
+
+When Magento route declarations are present, the offline knowledge hub includes
+a searchable API Inventory view and `knowledge_hub.json` contains the same
+data. The view groups declarations by path in case-insensitive alphabetical
+order, with expandable methods; duplicate
+declarations or overrides remain separate, with their source, service and
+access resources. It can be generated from a local clone without access to a
+running environment. Paths are source declarations, not complete URLs; base
+URLs and REST or store prefixes can vary by environment, as can deployed code,
+module enablement and overrides. Routes may be called by storefront code or
+external clients, and their implementations may use local data or call external
+services. The PHP contract extraction is best-effort, and configured parameter
+values are intentionally omitted. This is
+not Swagger or a complete OpenAPI specification: vendor/platform routes,
+outbound service calls, inherited contracts, resolved dependency injection,
+runtime module activation, request/response schemas and endpoint criticality
+are not determined. Confirm the effective routes and checkout dependencies with
+maintainers or the running deployment. Malformed route files are reported in
+the inventory rather than silently omitted.
 
 Documented commands are surfaced as evidence, not executed. Build and test
 suggestions inferred from manifests are heuristics; the commands declared by
@@ -69,6 +90,9 @@ specific integration role. Generated Magento static and preprocessed assets are
 excluded from architectural inference.
 Diagrams focus on the analyzed repository's components and inferred
 relationships, not the scanner pipeline or a dependency inventory.
+Recognized optional integration dependencies are reported separately from
+runtime integration signals, with their manifest and extra when available.
+Neither establishes which services are active in a particular deployment.
 Diagram legends explain component names and include available relationship
 evidence. Magento imports and type references alone do not establish an
 execution sequence. Magento architecture overviews summarize the detected
@@ -222,6 +246,9 @@ diagrams. The HTML and Mermaid source are embedded in the artifact; if the CDN
 is unavailable, users can still view or copy the Mermaid source.
 Execution-flow diagrams depict a likely conceptual path through relationships,
 not observed runtime events; imports and references are not proof of calls.
+When Magento lacks execution-specific evidence but has component relationships,
+the execution-flow artifact instead shows a labeled association path. Its edges
+may come from different modules and do not establish execution order or calls.
 External services and data stores are inferred from runtime dependencies,
 top-level imports, and recognized runtime configuration, not documentation
 mentions or development/optional dependencies. Profile-gated Compose services

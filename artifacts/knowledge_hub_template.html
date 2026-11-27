@@ -27,6 +27,8 @@
   .stack { display:grid; gap:.8rem; } .block { margin:1.2rem 0; }
   details summary { cursor:pointer; font-weight:700; color:var(--accent); }
   details summary span { color:var(--muted); font-size:.85rem; font-weight:400; }
+  details summary .api-path { color:var(--accent); font-size:inherit; font-weight:700; }
+  .api-methods { margin-top:.8rem; }
   .day span { color:var(--accent); font-weight:750; font-size:.85rem; text-transform:uppercase; }
   button { font:inherit; border:1px solid #aac3d0; background:white; color:var(--accent); border-radius:.35rem; padding:.35rem .65rem; cursor:pointer; }
   button:hover, button:focus-visible, a:focus-visible { outline:2px solid #237ba3; outline-offset:2px; }
@@ -44,7 +46,7 @@
 <header><h1>$title</h1><p>Knowledge Hub · Repository onboarding</p></header>
 <nav aria-label="Knowledge Hub views">
   <a href="#overview">Overview</a>$business_nav<a href="#architecture">Architecture</a>
-  $modules_nav<a href="#week">First Week</a>
+  $modules_nav$api_nav<a href="#week">First Week</a>
   $visual_nav<a href="#artifacts">Artifact Explorer</a>
 </nav>
 <main>
@@ -67,6 +69,7 @@
     $components_section
   </section>
   $modules_section
+  $api_section
   <section id="week"><h2>First Week Onboarding</h2><p class="notice">Use this plan as a starting point and validate it with your team.</p><div class="grid">$week</div></section>
   $visual_section
   <section id="artifacts"><h2>Artifact Explorer</h2><p>Open the individual generated artifacts for additional detail.</p><div class="card"><ul>$artifacts</ul></div></section>
@@ -85,6 +88,38 @@
   }
   window.addEventListener("hashchange", showView);
   showView();
+  const apiSearch = document.querySelector("#api-search");
+  if (apiSearch) {
+    const groups = [...document.querySelectorAll(".api-group")];
+    const cards = [...document.querySelectorAll(".api-card")];
+    const count = document.querySelector("#api-count");
+    let openBeforeSearch = null;
+    const filter = () => {
+      const query = apiSearch.value.trim().toLowerCase();
+      if (query && openBeforeSearch === null) {
+        openBeforeSearch = new Map(groups.map(group => [group, group.open]));
+      } else if (!query && openBeforeSearch !== null) {
+        groups.forEach(group => { group.open = openBeforeSearch.get(group); });
+        openBeforeSearch = null;
+      }
+      let visible = 0;
+      groups.forEach(group => {
+        const path = group.querySelector(".api-path").textContent.toLowerCase();
+        const children = [...group.querySelectorAll(".api-card")];
+        children.forEach(card => {
+          const text = card.textContent.toLowerCase();
+          const method = card.querySelector("summary").textContent.trim().split(" ")[0].toLowerCase();
+          card.hidden = !(method + " " + path + " " + text).includes(query);
+          if (!card.hidden) visible++;
+        });
+        group.hidden = children.every(card => card.hidden);
+        if (query && !group.hidden) group.open = true;
+      });
+      count.textContent = visible + " of " + cards.length + " declarations shown.";
+    };
+    apiSearch.addEventListener("input", filter);
+    filter();
+  }
   document.querySelectorAll(".diagram-card").forEach(card => {
     const viewport = card.querySelector(".diagram-viewport");
     const svg = viewport.querySelector("svg");

@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from analyzers.analyzers import DEFAULT_ANALYZERS, Analyzer, enrich_repository_model
+from analyzers.api_inventory import collect_api_inventory
 from models.models import Dependency, RepositoryFile, RepositoryModel
 from analyzers.repository_relevance import classify_path
 
@@ -921,6 +922,7 @@ def scan_repository(
         entry_points=_collect_entry_points(root, files_by_name),
         build_instructions=build_instructions,
         test_instructions=test_instructions,
+        api_inventory=collect_api_inventory(root, files_by_name.get("webapi.xml", [])),
     )
     return enrich_repository_model(model, analyzers)
 

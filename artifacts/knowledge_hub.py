@@ -79,6 +79,11 @@ def build_knowledge_hub(
             + ", ".join((architecture.external_dependencies + architecture.data_stores)[:6])
             + ". Confirm runtime configuration."
         )
+    if architecture.optional_integrations:
+        observations.append(
+            "Optional integrations (not proof of activation or deployment): "
+            + "; ".join(architecture.optional_integrations) + "."
+        )
     if architecture.relationships and not architecture.execution_flows:
         observations.append(
             "The available relationships do not establish an execution sequence; "
@@ -88,6 +93,7 @@ def build_knowledge_hub(
         "schema_version": 1,
         **({"repository_archetype": archetype.to_dict()} if archetype else {}),
         "technical_topics": [asdict(item) for item in topics],
+        "api_inventory": model.api_inventory,
         "overview": {
             "repository_name": model.repository_name,
             "purpose": purpose,
@@ -110,6 +116,7 @@ def build_knowledge_hub(
             "components": [asdict(item) for item in architecture.components],
             "execution_flows": architecture.execution_flows,
             "observations": observations,
+            "optional_integrations": architecture.optional_integrations,
         },
         "learning_path": first_week_onboarding_plan(insights),
         "workflows": [asdict(item) for item in narrative.workflows],
@@ -133,6 +140,16 @@ def _list(values: list[str], empty: str, *, ordered: bool = False) -> str:
         return f'<p class="empty">{_e(empty)}</p>'
     tag = "ol" if ordered else "ul"
     return f"<{tag}>" + "".join(f"<li>{_e(value)}</li>" for value in values) + f"</{tag}>"
+
+
+def _api_parameters(item: dict[str, Any]) -> str:
+    if "parameters" not in item:
+        return "Not available from the local service contract"
+    return ", ".join(
+        (param["type"] + " " if param["type"] else "") + "$" + param["name"]
+        + (" (optional)" if param["optional"] else "")
+        for param in item.get("parameters", [])
+    ) or "None declared"
 
 
 def _diagram(
@@ -309,6 +326,57 @@ def render_knowledge_hub_html(hub: dict[str, Any]) -> str:
         if not business_section:
             business_nav = ""
     modules_nav = '<a href="#modules">Critical Modules</a>' if modules else ""
+    inventory = hub.get("api_inventory", {})
+    endpoints = inventory.get("endpoints", [])
+    warnings = inventory.get("warnings", [])
+    api_nav = '<a href="#apis">API Inventory</a>' if endpoints or warnings else ""
+
+    def api_card(item: dict[str, Any]) -> str:
+        return (
+            '<details class="card api-card"><summary>'
+            f'{_e(item["method"])} <span>{_e(item["module"])}</span></summary>'
+            f'<p><strong>Declared service:</strong> {_e(item["service"] or "Not specified")}'
+            f'::{_e(item["service_method"] or "Not specified")}</p>'
+            f'<p><strong>Access resources:</strong> {_e(", ".join(item["resources"]) or "Not specified")}</p>'
+            f'<p><strong>Service parameters:</strong> {_e(_api_parameters(item))}</p>'
+            f'<p><strong>Return type:</strong> {_e(item.get("return_type") or "Not documented")}</p>'
+            + (f'<p><strong>Configured parameter names:</strong> {_e(", ".join(item["forced_parameters"]))}</p>'
+               if item["forced_parameters"] else "")
+            + f'<p><strong>Evidence:</strong> {_e(item["source"])}'
+            + (f'; {_e(item["contract_source"])}' if item.get("contract_source") else "")
+            + '</p></details>'
+        )
+
+    api_groups: dict[str, list[dict[str, Any]]] = {}
+    for item in endpoints:
+        api_groups.setdefault(item["path"], []).append(item)
+    api_cards = "".join(
+        '<details class="card api-group"><summary>'
+        f'<span class="api-path">{_e(path)}</span> '
+        f'<span>({len(items)} declaration{"s" if len(items) != 1 else ""}: '
+        f'{_e(", ".join(dict.fromkeys(item["method"] for item in items)))})</span>'
+        '</summary><div class="stack api-methods">'
+        + "".join(api_card(item) for item in items)
+        + '</div></details>'
+        for path, items in sorted(api_groups.items(), key=lambda entry: (entry[0].casefold(), entry[0]))
+    )
+    api_section = (
+        '<section id="apis"><h2>API Inventory</h2>'
+        '<p class="notice">This inventory lists project-owned Magento service routes declared in webapi.xml. '
+        'Storefront code or external clients may call them; their implementations may use local data or call '
+        'external services. Platform and vendor routes and outbound service calls are not inventoried.</p>'
+        '<p class="notice">The inventory can be generated from a local clone without access to a running environment. '
+        'Paths are source declarations, not complete URLs: base URLs and REST or store prefixes can vary by '
+        'environment, as can deployed code, enabled modules and route overrides. Confirm effective URLs, access, '
+        'request and response behavior, and business criticality with maintainers when possible. '
+        'Service parameters are not necessarily HTTP parameters.</p>'
+        f'<p>{len(endpoints)} route declaration{"s" if len(endpoints) != 1 else ""} '
+        f'across {len(api_groups)} path{"s" if len(api_groups) != 1 else ""}</p>'
+        + (_list(warnings, "") if warnings else "")
+        + ('<label for="api-search">Filter routes</label> <input id="api-search" type="search" placeholder="Method, path, module or service">'
+           '<p id="api-count" role="status"></p><div class="stack">' + api_cards + '</div>' if endpoints else "")
+        + '</section>'
+    ) if api_nav else ""
     modules_section = (
         '<section id="modules"><h2>Critical Modules</h2><p class="notice">Select a module for its inferred role and onboarding recommendation. Up to ten are shown.</p>'
         f'<div class="stack">{module_cards}</div></section>'
@@ -327,6 +395,7 @@ def render_knowledge_hub_html(hub: dict[str, Any]) -> str:
         overview_heading=overview_heading, notice=notice, overview_cards=overview_cards,
         overview_extra=overview_extra, business_nav=business_nav, business_section=business_section,
         modules_nav=modules_nav, modules_section=modules_section, visual_nav=visual_nav, visual_section=visual_section,
+        api_nav=api_nav, api_section=api_section,
         defer_section=(
             '<div class="card defer"><h3>Defer initially</h3>'
             f'<p>{_e(overview["defer_guidance"])}</p><details><summary>Detected lower-priority paths</summary>'
