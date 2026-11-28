@@ -50,7 +50,9 @@ for drill-down; large lists are summarized.
 
 The scanner parses inventoried Python files with the standard-library AST
 parser. It records modules, packages with `__init__.py`, classes, functions,
-methods, declarations, containment, and imports in `RepositoryModel` and
+methods, declarations, containment, imports, inheritance, interface-style
+implementations, decorators, static registrations, likely tests, and package
+exports in `RepositoryModel` and
 `repository_symbols.json`. Locations use repository-relative paths, 1-based
 lines, and 0-based UTF-8 byte columns, as provided by Python's AST. Evidence
 includes the source line and detector. Parse and read failures are logged and
@@ -64,7 +66,30 @@ followed by the observed import name, including relative dots. Such IDs do not
 refer to inventory symbols and may denote external imports, ambiguous names,
 or unresolved local names. Package names are derived from repository paths;
 unique suffix matching supports source-root layouts, but runtime search paths,
-re-exports, and dynamically defined symbols are not inferred.
+cross-file re-export chains, and dynamically defined symbols are not inferred.
+
+Relationship resolution uses lexical declarations and imports, including
+aliases, without executing the repository. A class inheriting a locally
+identified `typing.Protocol`, `typing_extensions.Protocol`, or `abc.ABC` /
+`ABCMeta` base is labeled `IMPLEMENTS`; other bases remain `INHERITS`.
+`IMPLEMENTS` is an inference supported by both the inheritance and interface
+declarations, not proof of structural compatibility. Decorators retain their
+application location; decorator factories and computed bases remain unresolved
+because their return values are not evaluated. Unresolved decorator sources and other unresolved
+endpoints use `unresolved:python:` IDs. Registration detection is restricted to
+`register`, `add`, and `include_router` calls on receivers named `registry`,
+`container`, or `router` (or ending in those names after an underscore).
+These calls are static evidence, not proof of activation.
+
+Package exports are inferred from initializer imports and literal `__all__`
+lists; dynamic `__all__` and wildcard re-exports are not expanded. Test
+relationships are low-confidence name or local-reference associations, not
+proof that a symbol is exercised or covered. `direct_observation` distinguishes
+observed syntax from inferred interface, export, and test associations.
+Evidence and confidence should be reviewed before drawing conclusions.
+The symbols artifact retains the unified relationships list and also groups
+imports, inheritance, implementations, decorators, registrations, tests,
+and exports by type.
 
 ### Architecture Discovery
 
@@ -72,8 +97,9 @@ Architecture Discovery combines repository structure and conventions with
 bounded source, README, documentation, and configuration evidence to infer
 components, responsibilities, relationships, subsystems, and supported
 architectural layers. It recognizes feature boundaries containing multiple
-layers and uniquely matched public modules. Resolved Python AST imports add
-evidence alongside existing lexical discovery. Diagrams focus on the repository's
+layers and uniquely matched public modules. Resolved Python AST relationships
+add evidence alongside existing lexical discovery; new AST relationship types
+are excluded from conceptual execution paths. Diagrams focus on the repository's
 components and relationships, and their legends include available evidence.
 
 Components accumulate evidence across categories. Confidence measures support
@@ -266,7 +292,7 @@ By default, the skill writes to `outputs/`:
 | `summary.md` | Technologies, structure, reading suggestions, and documented setup and CI commands |
 | `learning_path.md` | Suggested sequence for becoming productive |
 | `repository_map.json` | Serialized `RepositoryModel`, including metadata, dependencies, directories, files, and detected patterns |
-| `repository_symbols.json` | Symbol and relationship inventories with source evidence |
+| `repository_symbols.json` | Symbols, unified relationships, and relationship-type inventories with source evidence |
 | `architecture_summary.md` | System narrative, responsibilities, conceptual flow, and recommended exploration order |
 | `architecture_map.json` | Components, subsystems, layers, relationships and evidence, scores, entry points, integrations, repository relevance, and grouped dependencies |
 | `business_domains.md` | Inferred responsibilities, value, impact, starting modules, learning guidance, and expandable evidence |

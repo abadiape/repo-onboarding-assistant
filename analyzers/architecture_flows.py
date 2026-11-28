@@ -27,6 +27,8 @@ def _execution_flows(
     outgoing: dict[str, list[ArchitectureRelationship]] = {}
     incoming = set()
     for relation in relationships:
+        if relation.type.startswith("AST "):
+            continue
         if relation.type == "can expose as a tool":
             continue
         if require_execution_evidence and relation.type not in {

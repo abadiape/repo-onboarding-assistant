@@ -5,7 +5,7 @@ from collections import defaultdict
 import logging
 from pathlib import Path
 
-from analyzers.ast.parser import Import
+from analyzers.ast.parser import Import, ParseResult
 from analyzers.ast.python import module_name
 from analyzers.ast.registry import DEFAULT_REGISTRY, ParserRegistry
 from models.models import RepositoryFile
@@ -20,6 +20,7 @@ def collect_symbols(
     symbols: list[Symbol] = []
     relationships: list[Relationship] = []
     imports: list[Import] = []
+    parsed: list[tuple[str, ParseResult]] = []
     for file in sorted(files, key=lambda item: item.path):
         parser = registry.for_path(file.path)
         if parser is None or file.kind != "source":
@@ -28,6 +29,8 @@ def collect_symbols(
         symbols.extend(result.symbols)
         relationships.extend(result.relationships)
         imports.extend(result.imports)
+        if result.syntax_tree is not None:
+            parsed.append((file.path, result))
 
     modules = [symbol for symbol in symbols if symbol.language == "Python" and symbol.kind == "module"]
     packages: dict[str, Symbol] = {}
@@ -77,6 +80,7 @@ def collect_symbols(
             candidates = eligible(by_suffix.get(name, []))
         return candidates[0] if len(candidates) == 1 else None
 
+    resolved_imports: list[tuple[Import, Relationship]] = []
     for item in imports:
         source = by_id[item.source_id]
         if source.language != "Python":
@@ -101,10 +105,15 @@ def collect_symbols(
         unresolved = "." * item.level + ".".join(
             part for part in (item.module, item.name) if part
         )
-        relationships.append(Relationship(
+        relationship = Relationship(
             source_id=item.source_id,
             target_id=target.id if target else f"unresolved:python:{unresolved}",
             relationship_type="IMPORTS", confidence=0.9 if target else 1.0,
             direct_observation=True, evidence=[item.evidence],
-        ))
+        )
+        relationships.append(relationship)
+        resolved_imports.append((item, relationship))
+    from analyzers.ast.relationship_resolver import resolve_relationships
+
+    relationships.extend(resolve_relationships(symbols, parsed, resolved_imports))
     return symbols, relationships

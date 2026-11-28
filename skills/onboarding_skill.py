@@ -215,7 +215,18 @@ def run_onboarding(
     serialized_model = model.to_dict()
     symbols_path.write_text(
         json.dumps(
-            {"symbols": serialized_model["symbols"], "relationships": serialized_model["relationships"]},
+            {
+                "symbols": serialized_model["symbols"],
+                "relationships": serialized_model["relationships"],
+                **{
+                    key: [item for item in serialized_model["relationships"] if item["relationship_type"] == kind]
+                    for key, kind in (
+                        ("imports", "IMPORTS"), ("inheritance", "INHERITS"),
+                        ("implementations", "IMPLEMENTS"), ("decorators", "DECORATES"),
+                        ("registrations", "REGISTERS"), ("tests", "TESTS"), ("exports", "EXPORTS"),
+                    )
+                },
+            },
             ensure_ascii=False, indent=2,
         ) + "\n",
         encoding="utf-8",

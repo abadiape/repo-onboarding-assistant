@@ -137,7 +137,9 @@ def test_ast_relationships_enhance_lexical_architecture_and_artifacts(tmp_path):
     run_onboarding(repo, out)
     inventory = json.loads((out / "repository_symbols.json").read_text())
     repository = json.loads((out / "repository_map.json").read_text())
-    assert inventory == {key: repository[key] for key in ("symbols", "relationships")}
+    assert {key: inventory[key] for key in ("symbols", "relationships")} == {
+        key: repository[key] for key in ("symbols", "relationships")
+    }
     assert any(rel["relationship_type"] == "IMPORTS" for rel in inventory["relationships"])
     manifest = json.loads((out / "manifest.json").read_text())
     assert any(item["name"] == "repository_symbols.json" for item in manifest["artifacts"])

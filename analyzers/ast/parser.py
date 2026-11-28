@@ -15,6 +15,7 @@ class Import:
     name: str | None
     level: int
     evidence: Evidence
+    alias: str | None = None
 
 
 @dataclass
@@ -22,6 +23,8 @@ class ParseResult:
     symbols: list[Symbol] = field(default_factory=list)
     relationships: list[Relationship] = field(default_factory=list)
     imports: list[Import] = field(default_factory=list)
+    syntax_tree: object | None = None
+    source_lines: list[str] = field(default_factory=list)
 
 
 class Parser(Protocol):
