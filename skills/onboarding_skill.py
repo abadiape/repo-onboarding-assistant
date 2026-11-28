@@ -185,6 +185,7 @@ def run_onboarding(
     summary_path = out / "summary.md"
     learning_path_path = out / "learning_path.md"
     repo_map_path = out / "repository_map.json"
+    symbols_path = out / "repository_symbols.json"
     architecture_summary_path = out / "architecture_summary.md"
     architecture_map_path = out / "architecture_map.json"
     business_domains_path = out / "business_domains.md"
@@ -209,6 +210,14 @@ def run_onboarding(
     learning_path_path.write_text(learning_md, encoding="utf-8")
     repo_map_path.write_text(
         json.dumps(model.to_dict(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    serialized_model = model.to_dict()
+    symbols_path.write_text(
+        json.dumps(
+            {"symbols": serialized_model["symbols"], "relationships": serialized_model["relationships"]},
+            ensure_ascii=False, indent=2,
+        ) + "\n",
         encoding="utf-8",
     )
     architecture_summary_path.write_text(architecture_summary_md, encoding="utf-8")
@@ -251,7 +260,7 @@ def run_onboarding(
         encoding="utf-8",
     )
     artifact_names = [
-        "summary.md", "learning_path.md", "repository_map.json",
+        "summary.md", "learning_path.md", "repository_map.json", "repository_symbols.json",
         "architecture_summary.md", "architecture_map.json", "business_domains.md",
         "business_capabilities.md", "onboarding_priorities.md", "domain_map.json",
         "executive_summary.md", "critical_modules.md", "first_week_onboarding.md",

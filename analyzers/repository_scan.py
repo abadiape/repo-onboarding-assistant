@@ -8,6 +8,7 @@ from pathlib import Path
 
 from analyzers.analyzers import DEFAULT_ANALYZERS, Analyzer, enrich_repository_model
 from analyzers.api_inventory import collect_api_inventory
+from analyzers.ast import collect_symbols
 from analyzers.scan_dependencies import (
     _collect_dependencies,
     _collect_locked_dependencies,
@@ -121,4 +122,5 @@ def scan_repository(
             ),
         ),
     )
+    model.symbols, model.relationships = collect_symbols(root, model.files)
     return enrich_repository_model(model, analyzers)

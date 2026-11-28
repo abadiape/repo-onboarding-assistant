@@ -9,6 +9,8 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from models.symbols import Evidence, Relationship, Symbol
+
 
 @dataclass
 class Dependency:
@@ -60,6 +62,8 @@ class RepositoryModel:
     detected_patterns: list[str] = field(default_factory=list)
     locked_dependencies: list[Dependency] = field(default_factory=list)
     api_inventory: dict[str, Any] = field(default_factory=dict)
+    symbols: list[Symbol] = field(default_factory=list)
+    relationships: list[Relationship] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -80,6 +84,19 @@ class RepositoryModel:
             item if isinstance(item, RepositoryFile) else RepositoryFile(**item)
             for item in filtered.get("files", [])
         ]
+        for key, record_type in (("symbols", Symbol), ("relationships", Relationship)):
+            records = []
+            for item in filtered.get(key, []):
+                if isinstance(item, record_type):
+                    records.append(item)
+                else:
+                    values = dict(item)
+                    values["evidence"] = [
+                        evidence if isinstance(evidence, Evidence) else Evidence(**evidence)
+                        for evidence in values.get("evidence", [])
+                    ]
+                    records.append(record_type(**values))
+            filtered[key] = records
         return cls(**filtered)
 
 
