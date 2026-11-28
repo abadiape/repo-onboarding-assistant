@@ -155,8 +155,13 @@ def _discover_relationships(
         if file.kind == "source"
     }
     symbols_by_id = {symbol.id: symbol for symbol in model.symbols}
+    ast_types = {
+        "IMPORTS": "imports", "INHERITS": "AST inherits",
+        "IMPLEMENTS": "AST implements", "DECORATES": "AST decorates",
+        "REGISTERS": "AST registers", "EXPORTS": "AST exports",
+    }
     for relationship in model.relationships:
-        if relationship.relationship_type != "IMPORTS":
+        if relationship.relationship_type not in ast_types:
             continue
         source = symbols_by_id.get(relationship.source_id)
         target = symbols_by_id.get(relationship.target_id)
@@ -171,9 +176,9 @@ def _discover_relationships(
         if owner and target_owner:
             for evidence in relationship.evidence:
                 _add_relationship(
-                    found, owner, target_owner, "imports", relationship.confidence,
-                    f"{evidence.path}:{evidence.line} (AST import {target.qualified_name})",
-                    "Python AST import resolved to a local component symbol.",
+                    found, owner, target_owner, ast_types[relationship.relationship_type], relationship.confidence,
+                    f"{evidence.path}:{evidence.line} (AST {relationship.relationship_type.lower().removesuffix('s')} {target.qualified_name})",
+                    "Static AST relationship between local component symbols; not runtime execution.",
                 )
     for path, content in files.items():
         if path not in source_paths:

@@ -86,11 +86,30 @@ def build_knowledge_hub(
             "The available relationships do not establish an execution sequence; "
             "inspect their evidence in the visualizations."
         )
+    symbols = {symbol.id: symbol for symbol in model.symbols}
+    symbol_relationships = {}
+    for key, kind in (
+        ("imports", "IMPORTS"), ("exports", "EXPORTS"), ("inheritance", "INHERITS"), ("implementations", "IMPLEMENTS"),
+        ("decorators", "DECORATES"), ("registrations", "REGISTERS"), ("tests", "TESTS"),
+    ):
+        matches = [item for item in model.relationships if item.relationship_type == kind]
+        symbol_relationships[key] = {
+            "count": len(matches),
+            "items": [
+                {
+                    **asdict(item),
+                    "source_name": symbols[item.source_id].qualified_name if item.source_id in symbols else item.source_id,
+                    "target_name": symbols[item.target_id].qualified_name if item.target_id in symbols else item.target_id,
+                }
+                for item in matches[:5]
+            ],
+        }
     return {
         "schema_version": 1,
         **({"repository_archetype": archetype.to_dict()} if archetype else {}),
         "technical_topics": [asdict(item) for item in topics],
         "api_inventory": model.api_inventory,
+        "symbol_relationships": symbol_relationships,
         "overview": {
             "repository_name": model.repository_name,
             "purpose": purpose,

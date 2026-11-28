@@ -7,6 +7,7 @@ from pathlib import Path
 from analyzers.architecture_components import (
     _alias_pattern,
     _component_aliases,
+    _source_owner,
     _target_component,
 )
 from analyzers.architecture_concepts import _concept_for, _framework_key
@@ -56,6 +57,20 @@ def _rank_components(
             add(component, "framework", f"{framework} framework convention")
 
     source_paths = {file.path for file in model.files if file.kind == "source"}
+    symbols = {symbol.id: symbol for symbol in model.symbols}
+    for relation in model.relationships:
+        if relation.relationship_type not in {"EXPORTS", "REGISTERS", "TESTS"}:
+            continue
+        target = symbols.get(relation.target_id)
+        if target is None or target.path not in source_paths:
+            continue
+        component = _source_owner(target.path, components)
+        if component:
+            for evidence in relation.evidence:
+                if evidence.path not in source_paths:
+                    continue
+                category = "public_api" if relation.relationship_type == "EXPORTS" else "reference"
+                add(component, category, f"{evidence.path}:{evidence.line} (AST {relation.relationship_type.lower()} evidence)")
     for path, content in files.items():
         name = Path(path).name.lower()
         if kinds.get(path) == "source":

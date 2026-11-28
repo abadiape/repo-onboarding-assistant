@@ -89,11 +89,22 @@ def extract_architecture(model: RepositoryModel) -> ArchitectureModel:
             for _, import_path in _public_imports(path, content)
         )
     ]
+    symbols = {symbol.id: symbol for symbol in model.symbols}
+    public_api_paths.extend(
+        source.path for relation in model.relationships
+        if relation.relationship_type == "EXPORTS"
+        for source in [symbols.get(relation.source_id)]
+        for target in [symbols.get(relation.target_id)]
+        if source is not None and target is not None
+        and source.path in source_paths and target.path in source_paths
+        and not set(_parts(source.path)) & _IGNORED_AREAS
+        and not set(_parts(target.path)) & _IGNORED_AREAS
+    )
     if public_api_paths:
         min_depth = min(len(Path(path).parts) for path in public_api_paths)
-        public_api_paths = sorted(
+        public_api_paths = sorted({
             path for path in public_api_paths if len(Path(path).parts) == min_depth
-        )[:3]
+        })[:3]
     public_entries = [
         target.id for entry in entry_points
         for _, import_path in _public_imports(entry, relationship_sources.get(entry, ""))

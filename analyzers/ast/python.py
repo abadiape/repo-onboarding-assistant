@@ -46,6 +46,8 @@ class PythonParser:
         except (SyntaxError, ValueError, RecursionError) as exc:
             logger.warning("Cannot parse Python source %s: %s", path, exc)
             return result
+        result.syntax_tree = tree
+        result.source_lines = lines
 
         class Visitor(ast.NodeVisitor):
             def __init__(self) -> None:
@@ -82,12 +84,15 @@ class PythonParser:
 
             def visit_Import(self, node: ast.Import) -> None:
                 for alias in node.names:
-                    result.imports.append(Import(self.parent.id, alias.name, None, 0, self.evidence(node)))
+                    result.imports.append(Import(
+                        self.parent.id, alias.name, None, 0, self.evidence(node), alias.asname
+                    ))
 
             def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
                 for alias in node.names:
                     result.imports.append(Import(
-                        self.parent.id, node.module or "", alias.name, node.level, self.evidence(node)
+                        self.parent.id, node.module or "", alias.name, node.level,
+                        self.evidence(node), alias.asname
                     ))
 
         Visitor().visit(tree)

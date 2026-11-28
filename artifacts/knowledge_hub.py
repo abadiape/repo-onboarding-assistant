@@ -284,6 +284,32 @@ def render_knowledge_hub_html(hub: dict[str, Any]) -> str:
     ) if hub["visualizations"][1]["edges"] else ""
     layers_section = f'<div class="block"><h2>Architectural Layers</h2><div class="grid">{layers}</div></div>' if architecture["layers"] else ""
     components_section = f'<div class="block"><h2>Major Components</h2><div class="grid">{components}</div></div>' if architecture["components"] else ""
+    relationship_cards = []
+    for key, group in hub.get("symbol_relationships", {}).items():
+        if not group["count"]:
+            continue
+        rows = []
+        for item in group["items"]:
+            evidence = item["evidence"][0] if item["evidence"] else None
+            location = (
+                f'{evidence["path"]}:{evidence["line"]} ({evidence["detector"]}): {evidence["extract"]}'
+                if evidence else "Evidence unavailable"
+            )
+            status = "observed syntax" if item["direct_observation"] else "inferred"
+            rows.append(
+                f'<li>{_e(item["source_name"])} → {_e(item["target_name"])} '
+                f'({_e(status)}, confidence {_e(item["confidence"])}). {_e(location)}</li>'
+            )
+        relationship_cards.append(
+            f'<article class="card"><h3>{_e(key.title())} ({group["count"]})</h3>'
+            + "<ul>" + "".join(rows) + "</ul></article>"
+        )
+    symbol_relationships_section = (
+        '<div class="block"><h2>Symbol Relationship Evidence</h2>'
+        '<p class="notice">Static observations and inferred associations, not runtime activation or test coverage. '
+        'Unresolved names remain unresolved. Up to five examples per type are shown.</p>'
+        '<div class="grid">' + "".join(relationship_cards) + '</div></div>'
+    ) if relationship_cards else ""
     diagrams = [_diagram(item, index, component_details) for index, item in enumerate(hub["visualizations"]) if item["edges"]]
     visual_nav = '<a href="#visualizations">Visualizations</a>' if diagrams else ""
     visual_section = '<section id="visualizations"><h2>Visualizations</h2><p class="notice">Offline SVG maps generated from structured findings. Associations are inferred.</p><div class="stack">' + "".join(diagrams) + '</div></section>' if diagrams else ""
@@ -307,5 +333,6 @@ def render_knowledge_hub_html(hub: dict[str, Any]) -> str:
         ) if architecture.get("observations") else "",
         technologies=_e(", ".join(architecture["languages"] + architecture["frameworks"]) or "Not detected"),
         layers_section=layers_section, components_section=components_section, flow_section=flow_section,
+        symbol_relationships_section=symbol_relationships_section,
         week=week, artifacts=artifacts,
     )
