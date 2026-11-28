@@ -53,7 +53,8 @@ parser. It records modules, packages with `__init__.py`, classes, functions,
 methods, declarations, containment, imports, inheritance, interface-style
 implementations, decorators, static registrations, likely tests, and package
 exports in `RepositoryModel` and
-`repository_symbols.json`. Locations use repository-relative paths, 1-based
+`repository_knowledge.json`. An identical `repository_symbols.json` is also
+generated for compatibility. Locations use repository-relative paths, 1-based
 lines, and 0-based UTF-8 byte columns, as provided by Python's AST. Evidence
 includes the source line and detector. Parse and read failures are logged and
 do not stop the scan; a readable file with invalid syntax still has a module
@@ -292,7 +293,8 @@ By default, the skill writes to `outputs/`:
 | `summary.md` | Technologies, structure, reading suggestions, and documented setup and CI commands |
 | `learning_path.md` | Suggested sequence for becoming productive |
 | `repository_map.json` | Serialized `RepositoryModel`, including metadata, dependencies, directories, files, and detected patterns |
-| `repository_symbols.json` | Symbols, unified relationships, and relationship-type inventories with source evidence |
+| `repository_knowledge.json` | Symbols, unified relationships, and relationship-type inventories with source evidence |
+| `repository_symbols.json` | Compatibility copy of `repository_knowledge.json` |
 | `architecture_summary.md` | System narrative, responsibilities, conceptual flow, and recommended exploration order |
 | `architecture_map.json` | Components, subsystems, layers, relationships and evidence, scores, entry points, integrations, repository relevance, and grouped dependencies |
 | `business_domains.md` | Inferred responsibilities, value, impact, starting modules, learning guidance, and expandable evidence |

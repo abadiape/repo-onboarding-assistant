@@ -131,14 +131,19 @@ def test_artifact_architecture_and_hub_use_relationship_evidence(tmp_path):
     )
     out = tmp_path / "output"
     run_onboarding(repo, out)
-    artifact = json.loads((out / "repository_symbols.json").read_text())
+    knowledge = (out / "repository_knowledge.json").read_bytes()
+    assert knowledge == (out / "repository_symbols.json").read_bytes()
+    artifact = json.loads(knowledge)
     assert all(key in artifact for key in ("symbols", "relationships", "imports", "inheritance", "implementations", "decorators", "registrations", "tests", "exports"))
     assert artifact["inheritance"] and artifact["exports"] and artifact["tests"]
     assert all(item in artifact["relationships"] for item in artifact["inheritance"])
     hub = json.loads((out / "knowledge_hub.json").read_text())
+    assert {"repository_knowledge.json", "repository_symbols.json"} <= set(hub["artifacts"])
     assert hub["symbol_relationships"]["inheritance"]["count"] == len(artifact["inheritance"])
     assert hub["symbol_relationships"]["exports"]["items"][0]["evidence"][0]["path"] == "controllers/__init__.py"
     html = (out / "knowledge_hub.html").read_text()
+    assert 'href="repository_knowledge.json"' in html
+    assert 'href="repository_symbols.json"' in html
     assert "Symbol Relationship Evidence" in html
     assert "not runtime activation or test coverage" in html
     assert "controllers/main.py:2" in html
