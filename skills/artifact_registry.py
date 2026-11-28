@@ -76,8 +76,12 @@ def register_artifacts(out: Path, diagram_paths: dict[str, Path]) -> ArtifactReg
         description="Structured RepositoryModel for the scanned repository.",
     ))
     registry.register(Artifact(
+        name="repository_knowledge.json", type=ArtifactType.JSON, path=str(out / "repository_knowledge.json"),
+        description="Repository symbol and relationship knowledge with source evidence.",
+    ))
+    registry.register(Artifact(
         name="repository_symbols.json", type=ArtifactType.JSON, path=str(out / "repository_symbols.json"),
-        description="Repository symbol and relationship inventory with source evidence.",
+        description="Compatibility copy of repository_knowledge.json.",
     ))
     registry.register(Artifact(
         name="architecture_summary.md",
