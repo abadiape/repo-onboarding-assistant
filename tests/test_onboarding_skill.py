@@ -266,6 +266,7 @@ def test_run_onboarding_end_to_end(tmp_path):
         "summary.md",
         "learning_path.md",
         "repository_map.json",
+        "repository_symbols.json",
         "architecture_summary.md",
         "architecture_map.json",
         "business_domains.md",

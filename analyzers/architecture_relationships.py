@@ -15,7 +15,10 @@ from analyzers.architecture_components import (
 from analyzers.architecture_concepts import _concept_for_class
 from analyzers.architecture_evidence import (
     _DOC_EXTENSIONS,
+    _IGNORED_AREAS,
+    _IGNORED_CONTEXT_AREAS,
     _IMPORT_PATTERNS,
+    _parts,
     _source_code_lines,
 )
 from models.architecture_model import ArchitectureComponent, ArchitectureRelationship
@@ -151,6 +154,27 @@ def _discover_relationships(
         file.path for file in model.files
         if file.kind == "source"
     }
+    symbols_by_id = {symbol.id: symbol for symbol in model.symbols}
+    for relationship in model.relationships:
+        if relationship.relationship_type != "IMPORTS":
+            continue
+        source = symbols_by_id.get(relationship.source_id)
+        target = symbols_by_id.get(relationship.target_id)
+        if not source or not target or source.path not in source_paths or target.path not in source_paths:
+            continue
+        if set(_parts(source.path)) & (_IGNORED_AREAS | _IGNORED_CONTEXT_AREAS):
+            continue
+        if set(_parts(target.path)) & (_IGNORED_AREAS | _IGNORED_CONTEXT_AREAS):
+            continue
+        owner = _source_owner(source.path, components)
+        target_owner = _source_owner(target.path, components)
+        if owner and target_owner:
+            for evidence in relationship.evidence:
+                _add_relationship(
+                    found, owner, target_owner, "imports", relationship.confidence,
+                    f"{evidence.path}:{evidence.line} (AST import {target.qualified_name})",
+                    "Python AST import resolved to a local component symbol.",
+                )
     for path, content in files.items():
         if path not in source_paths:
             continue

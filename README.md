@@ -46,13 +46,34 @@ to namespace-level groups. Counts are deduplicated by package name, not
 installation or version. Individual entries and group members remain available
 for drill-down; large lists are summarized.
 
+### AST Symbol Inventory
+
+The scanner parses inventoried Python files with the standard-library AST
+parser. It records modules, packages with `__init__.py`, classes, functions,
+methods, declarations, containment, and imports in `RepositoryModel` and
+`repository_symbols.json`. Locations use repository-relative paths, 1-based
+lines, and 0-based UTF-8 byte columns, as provided by Python's AST. Evidence
+includes the source line and detector. Parse and read failures are logged and
+do not stop the scan; a readable file with invalid syntax still has a module
+record.
+
+Import statements are direct observations; local target resolution is
+best-effort based on unique names and is not runtime resolution. Imports
+without a unique matching local symbol use an `unresolved:python:` target ID
+followed by the observed import name, including relative dots. Such IDs do not
+refer to inventory symbols and may denote external imports, ambiguous names,
+or unresolved local names. Package names are derived from repository paths;
+unique suffix matching supports source-root layouts, but runtime search paths,
+re-exports, and dynamically defined symbols are not inferred.
+
 ### Architecture Discovery
 
 Architecture Discovery combines repository structure and conventions with
 bounded source, README, documentation, and configuration evidence to infer
 components, responsibilities, relationships, subsystems, and supported
 architectural layers. It recognizes feature boundaries containing multiple
-layers and uniquely matched public modules. Diagrams focus on the repository's
+layers and uniquely matched public modules. Resolved Python AST imports add
+evidence alongside existing lexical discovery. Diagrams focus on the repository's
 components and relationships, and their legends include available evidence.
 
 Components accumulate evidence across categories. Confidence measures support
@@ -132,6 +153,10 @@ Repository
     ↓
 Inventory Discovery
     ↓
+AST Extraction and Relationship Resolution
+    ↓
+Repository Knowledge Model
+    ↓
 Architecture Discovery
     ↓
 Domain Discovery
@@ -149,6 +174,8 @@ dependency: later stages also consume earlier models directly.
 1. **Inventory Discovery** scans the repository and enriches a
    `RepositoryModel` with files, dependencies, tooling, commands, and other
    observed or convention-based facts.
+   **AST Extraction and Relationship Resolution** adds a reusable symbol and
+   relationship inventory to that model before architecture discovery.
 2. **Architecture Discovery** derives an `ArchitectureModel` of components,
    relationships, evidence, and architectural groupings.
 3. **Domain Discovery** uses an independently determined repository archetype
@@ -175,6 +202,7 @@ than a single scanner report:
 |---|---|
 | Repository, files, directories | Metadata, relative paths, file roles, languages, and detected patterns in `RepositoryModel` |
 | Dependencies | Manifest declarations and lockfile entries with source, scope, and category |
+| Symbols and source relationships | Python AST declarations, package containment, and observed imports with source evidence in `RepositoryModel` |
 | Components and architecture | Components, subsystems, layers, responsibilities, locations, and inferred flows in `ArchitectureModel` |
 | Domains and capabilities | Inferred business domains, responsibilities, capabilities, and custom modules in `DomainDiscovery` |
 | Integrations | Architecture dependency and data-store signals, optional integrations, and inferred business integration boundaries |
@@ -238,6 +266,7 @@ By default, the skill writes to `outputs/`:
 | `summary.md` | Technologies, structure, reading suggestions, and documented setup and CI commands |
 | `learning_path.md` | Suggested sequence for becoming productive |
 | `repository_map.json` | Serialized `RepositoryModel`, including metadata, dependencies, directories, files, and detected patterns |
+| `repository_symbols.json` | Symbol and relationship inventories with source evidence |
 | `architecture_summary.md` | System narrative, responsibilities, conceptual flow, and recommended exploration order |
 | `architecture_map.json` | Components, subsystems, layers, relationships and evidence, scores, entry points, integrations, repository relevance, and grouped dependencies |
 | `business_domains.md` | Inferred responsibilities, value, impact, starting modules, learning guidance, and expandable evidence |
